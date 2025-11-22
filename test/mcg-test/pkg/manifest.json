@@ -1,0 +1,16 @@
+[
+    {
+        "process_name": "mcg-test",
+        "process_wasm_path": "/mcg-test.wasm",
+        "on_exit": "Restart",
+        "request_networking": false,
+        "request_capabilities": [
+            "mcg:mcg:template.os"
+        ],
+        "grant_capabilities": [
+            "mcg:mcg:template.os",
+            "tester:tester:sys"
+        ],
+        "public": true
+    }
+]

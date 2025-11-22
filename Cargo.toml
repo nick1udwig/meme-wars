@@ -1,0 +1,11 @@
+[profile.release]
+lto = true
+opt-level = "s"
+panic = "abort"
+
+[workspace]
+members = [
+    "mcg",
+    "target/mcg-caller-util?",
+]
+resolver = "2"
