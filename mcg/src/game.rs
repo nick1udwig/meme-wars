@@ -264,28 +264,125 @@ impl GameState {
             .iter()
             .find(|c| c.instance_id == action.card_id)
             .ok_or("exploit not in hand")?;
-        match (&card.class, &action.target) {
-            (CardKind::Exploit(_), Some(Target::Card(target_id))) => {
-                if let Some(target) = opponent
-                    .kitchen
-                    .iter()
-                    .find(|c| c.instance_id == *target_id)
-                {
+
+        // Get the exploit effect to determine valid targets
+        let effect = match &card.class {
+            CardKind::Exploit(e) => e,
+            _ => return Err("card is not an exploit".into()),
+        };
+
+        // Validate target based on exploit effect type
+        match (effect, &action.target) {
+            // Single-target damage exploits
+            (ExploitEffect::Damage(_), Some(Target::Card(target_id))) => {
+                // Must target enemy cards
+                let target_in_kitchen = opponent.kitchen.iter().find(|c| c.instance_id == *target_id);
+                let target_in_feed = self.feed.iter().find(|c| c.instance_id == *target_id && c.owner == seat.other());
+
+                if let Some(target) = target_in_kitchen {
                     if has_taunt(&opponent.kitchen) && !target.keywords.contains(&Keyword::Taunt) {
                         return Err("must target taunt card first".into());
                     }
                     if target.keywords.contains(&Keyword::Stealth) {
                         return Err("target is stealth".into());
                     }
-                } else if !self
-                    .feed
-                    .iter()
-                    .any(|c| c.instance_id == *target_id && c.owner == seat.other())
-                {
-                    return Err("target not found".into());
+                    Ok(())
+                } else if target_in_feed.is_some() {
+                    Ok(())
+                } else {
+                    Err("target not found in enemy kitchen or feed".into())
+                }
+            }
+            (ExploitEffect::Damage(_), Some(Target::EnemyKitchen)) => {
+                // Can target enemy kitchen zone
+                Ok(())
+            }
+            (ExploitEffect::Damage(_), Some(Target::FeedSlot(slot))) => {
+                // Can target feed slot
+                if *slot >= self.feed.len() {
+                    return Err("invalid feed slot".into());
                 }
                 Ok(())
             }
+            (ExploitEffect::Damage(_), None) => {
+                return Err("damage exploit requires a target".into());
+            }
+
+            // Area damage targets enemy kitchen zone
+            (ExploitEffect::AreaDamageKitchen(_), _) => {
+                // No specific target needed, targets all enemy kitchen
+                Ok(())
+            }
+
+            // Buff exploits target own cards
+            (ExploitEffect::Boost(_) | ExploitEffect::Protect | ExploitEffect::Double, Some(Target::Card(target_id))) => {
+                // Must target own cards
+                let target_in_kitchen = player.kitchen.iter().find(|c| c.instance_id == *target_id);
+                let target_in_feed = self.feed.iter().find(|c| c.instance_id == *target_id && c.owner == *seat);
+
+                if target_in_kitchen.is_none() && target_in_feed.is_none() {
+                    Err("target not found in your kitchen or feed".into())
+                } else {
+                    Ok(())
+                }
+            }
+            (ExploitEffect::Boost(_) | ExploitEffect::Protect | ExploitEffect::Double, None) => {
+                return Err("buff exploit requires a target".into());
+            }
+
+            // Debuff/removal exploits target enemy cards
+            (ExploitEffect::Debuff(_) | ExploitEffect::Execute | ExploitEffect::Silence, Some(Target::Card(target_id))) => {
+                // Must target enemy cards
+                let target_in_kitchen = opponent.kitchen.iter().find(|c| c.instance_id == *target_id);
+                let target_in_feed = self.feed.iter().find(|c| c.instance_id == *target_id && c.owner == seat.other());
+
+                if let Some(target) = target_in_kitchen {
+                    if has_taunt(&opponent.kitchen) && !target.keywords.contains(&Keyword::Taunt) {
+                        return Err("must target taunt card first".into());
+                    }
+                    if target.keywords.contains(&Keyword::Stealth) {
+                        return Err("target is stealth".into());
+                    }
+                    Ok(())
+                } else if target_in_feed.is_some() {
+                    Ok(())
+                } else {
+                    Err("target not found in enemy kitchen or feed".into())
+                }
+            }
+            (ExploitEffect::Debuff(_) | ExploitEffect::Execute | ExploitEffect::Silence, None) => {
+                return Err("debuff/removal exploit requires a target".into());
+            }
+
+            // Feed slot targeting exploits
+            (ExploitEffect::PinSlot(_) | ExploitEffect::MoveUp(_) | ExploitEffect::NukeBelow(_), Some(Target::FeedSlot(slot))) => {
+                if *slot >= self.feed.len() {
+                    return Err("invalid feed slot".into());
+                }
+                Ok(())
+            }
+            (ExploitEffect::PinSlot(_) | ExploitEffect::MoveUp(_) | ExploitEffect::NukeBelow(_), None) => {
+                return Err("feed manipulation exploit requires a target slot".into());
+            }
+
+            // Zone-targeting exploits (no specific target)
+            (ExploitEffect::LockFeed | ExploitEffect::ShuffleFeed | ExploitEffect::WipeBottom(_), _) => {
+                // These target zones, not specific cards
+                Ok(())
+            }
+
+            // Self-targeting exploits (no target needed)
+            (ExploitEffect::ResurrectLast | ExploitEffect::DiscountNext | ExploitEffect::SpawnShitposts(_), _) => {
+                // These don't need targets
+                Ok(())
+            }
+
+            // Opponent-targeting exploits (target opponent directly)
+            (ExploitEffect::Tax(_) | ExploitEffect::ManaBurn(_), _) => {
+                // These target the opponent directly
+                Ok(())
+            }
+
             _ => Ok(()),
         }
     }

@@ -220,6 +220,7 @@ function App() {
   const [basedModalSeenTurn, setBasedModalSeenTurn] = useState<number | null>(null);
   const [isEndingTurn, setIsEndingTurn] = useState(false);
   const [hoverZone, setHoverZone] = useState<'feed' | 'kitchen' | null>(null);
+  const [hoverTargetCard, setHoverTargetCard] = useState<LiveCard | null>(null); // Track target card for pointer exploit drops
   const [holdTargets, setHoldTargets] = useState<{ feed: boolean; kitchen: boolean; enemy: boolean }>({
     feed: false,
     kitchen: false,
@@ -227,11 +228,14 @@ function App() {
   });
   const [noPlayCardId, setNoPlayCardId] = useState<string | null>(null);
   const holdTimer = useRef<number | null>(null);
+  const nativeDragActive = useRef(false); // Track if native HTML5 drag is in progress
   const [heldCard, setHeldCard] = useState<string | null>(null);
   const [isPointerDragging, setIsPointerDragging] = useState(false);
   const feedZoneRef = useRef<HTMLDivElement | null>(null);
   const kitchenZoneRef = useRef<HTMLDivElement | null>(null);
   const isRevealingRef = useRef<boolean>(false);
+  const [opponentExploits, setOpponentExploits] = useState<Array<{ card_id: string; target: any }>>([]);
+  const opponentExploitTimer = useRef<number | null>(null);
 
   const activePlan = useMemo(() => pendingReveal?.plan ?? draftPlan, [pendingReveal, draftPlan]);
   const queuedToKitchen = useMemo(() => new Set(activePlan.plays_to_kitchen), [activePlan]);
@@ -284,40 +288,56 @@ function App() {
     const mine = game.players.find((p) => p.node_id === nodeId);
     return mine?.seat ?? game.players?.[0]?.seat ?? null;
   }, [game, nodeId]);
-  const myPlayer: BackendPlayerState | undefined = useMemo(
-    () => game?.players.find((p) => p.seat === mySeat),
-    [game, mySeat],
-  );
-  const opponentPlayer: BackendPlayerState | undefined = useMemo(
-    () => game?.players.find((p) => p.seat !== mySeat),
-    [game, mySeat],
-  );
+  const myPlayer: BackendPlayerState | undefined = useMemo(() => {
+    const player = game?.players.find((p) => p.seat === mySeat);
+    console.log('myPlayer:', { mySeat, player: player?.seat, nodeId: player?.node_id });
+    return player;
+  }, [game, mySeat]);
+
+  const opponentPlayer: BackendPlayerState | undefined = useMemo(() => {
+    const player = game?.players.find((p) => p.seat !== mySeat);
+    console.log('opponentPlayer:', { mySeat, player: player?.seat, nodeId: player?.node_id });
+    return player;
+  }, [game, mySeat]);
 
   const feedCards: LiveCard[] = useMemo(
     () => (game ? game.feed.map((card) => mapInstanceToLiveCard(card)) : []),
     [game],
   );
-  const playerKitchen = useMemo(
-    () => (myPlayer ? myPlayer.kitchen.map((card) => mapInstanceToLiveCard(card)) : []),
-    [myPlayer],
-  );
-  const enemyKitchen = useMemo(
-    () => (opponentPlayer ? opponentPlayer.kitchen.map((card) => mapInstanceToLiveCard(card)) : []),
-    [opponentPlayer],
-  );
+  const playerKitchen = useMemo(() => {
+    const cards = myPlayer ? myPlayer.kitchen.map((card) => mapInstanceToLiveCard(card)) : [];
+    console.log('playerKitchen cards:', cards.map(c => ({ name: c.name, owner: c.owner })));
+    return cards;
+  }, [myPlayer]);
+
+  const enemyKitchen = useMemo(() => {
+    const cards = opponentPlayer ? opponentPlayer.kitchen.map((card) => mapInstanceToLiveCard(card)) : [];
+    console.log('🏠 enemyKitchen cards:', cards.map(c => ({
+      name: c.name,
+      id: c.id,
+      owner: c.owner,
+      location: c.location,
+      kind: c.kind
+    })));
+    return cards;
+  }, [opponentPlayer]);
   const playerHand = useMemo(
     () => (myPlayer ? myPlayer.hand.map((card) => mapInstanceToLiveCard(card)) : []),
     [myPlayer],
   );
-  const draggingCard = useMemo(
-    () =>
-      draggingId
-        ? playerHand.find((c) => c.id === draggingId) ||
-          playerKitchen.find((c) => c.id === draggingId) ||
-          null
-        : null,
-    [draggingId, playerHand, playerKitchen],
-  );
+  const draggingCard = useMemo(() => {
+    if (!draggingId) return null;
+    const fromHand = playerHand.find((c) => c.id === draggingId);
+    const fromKitchen = playerKitchen.find((c) => c.id === draggingId);
+    const card = fromHand || fromKitchen || null;
+    console.log('🎴 draggingCard computed:', {
+      draggingId,
+      foundInHand: !!fromHand,
+      foundInKitchen: !!fromKitchen,
+      card: card ? { name: card.name, kind: card.kind, location: card.location } : null,
+    });
+    return card;
+  }, [draggingId, playerHand, playerKitchen]);
   const plannedKitchenAdds = useMemo(
     () =>
       activePlan.plays_to_kitchen
@@ -380,83 +400,173 @@ function App() {
     opponentCalledBased && game && (basedModalSeenTurn === null || basedModalSeenTurn < game.turn);
 
   const getExploitEffect = (card: LiveCard) => {
-    if (card.kind !== 'Exploit') return null;
+    if (card.kind !== 'Exploit') {
+      console.log('⚠️ getExploitEffect: card is not an Exploit', { cardName: card.name, kind: card.kind });
+      return null;
+    }
+
+    // First try to find the card instance directly to get the effect
+    const allInstances = [
+      ...(myPlayer?.hand || []),
+      ...(myPlayer?.kitchen || []),
+      ...(opponentPlayer?.hand || []),
+      ...(opponentPlayer?.kitchen || []),
+      ...(game?.feed || [])
+    ];
+
+    console.log('🔍 getExploitEffect searching for:', {
+      cardId: card.id,
+      cardName: card.name,
+      totalInstances: allInstances.length,
+      instanceIds: allInstances.slice(0, 5).map(i => i.instance_id),
+    });
+
+    const instance = allInstances.find(inst => inst.instance_id === card.id);
+    if (instance && 'Exploit' in (instance.class as any)) {
+      const effect = (instance.class as any).Exploit;
+      console.log('✅ Found effect from instance:', effect);
+      return effect;
+    }
+
+    // Fall back to catalog lookup
+    console.log('🔍 Falling back to catalog lookup for variantId:', card.variantId);
     const def = catalogById.get(card.variantId);
-    if (!def) return null;
+    if (!def) {
+      console.log('❌ Card definition not found for:', card.variantId);
+      return null;
+    }
     const effect = (def.class as any).Exploit;
+    console.log('✅ Found effect from catalog:', effect);
     return effect ?? null;
   };
 
   const getExploitKind = (effect: any): string => {
     if (!effect) return '';
     if (typeof effect === 'string') return effect;
-    const key = Object.keys(effect)[0];
-    return key ?? '';
+    if (typeof effect === 'object' && effect !== null) {
+      const key = Object.keys(effect)[0];
+      return key ?? '';
+    }
+    return '';
   };
 
   const getExploitTargetProfile = (effect: any) => {
     const kind = getExploitKind(effect);
     const profile = {
+      // Can target specific cards
       enemyKitchenCard: false,
       enemyFeedCard: false,
       allyKitchenCard: false,
       allyFeedCard: false,
+      // Can target slots or zones
       feedSlot: false,
       enemyKitchenZone: false,
       feedZone: false,
+      // Targeting behavior
       requiresTarget: true,
+      targetType: 'none' as 'card' | 'slot' | 'zone' | 'none',
     };
+
+    console.log('getExploitTargetProfile - kind:', kind, 'effect:', effect);
+
     switch (kind) {
       case 'Damage':
+        // Single-target damage can target enemy cards or feed slots
         profile.enemyKitchenCard = true;
         profile.enemyFeedCard = true;
         profile.feedSlot = true;
+        profile.targetType = 'card';
         break;
       case 'AreaDamageKitchen':
+        // Area damage targets the entire enemy kitchen zone
         profile.enemyKitchenZone = true;
         profile.requiresTarget = false;
+        profile.targetType = 'zone';
         break;
       case 'Boost':
       case 'Protect':
       case 'Double':
+        // Buff exploits target ally cards
         profile.allyKitchenCard = true;
         profile.allyFeedCard = true;
+        profile.targetType = 'card';
         break;
       case 'Debuff':
       case 'Execute':
       case 'Silence':
+        // Debuff/removal exploits target enemy cards
         profile.enemyKitchenCard = true;
         profile.enemyFeedCard = true;
+        profile.targetType = 'card';
         break;
       case 'PinSlot':
       case 'MoveUp':
       case 'NukeBelow':
+        // Feed manipulation targets specific feed slots
         profile.feedSlot = true;
+        profile.targetType = 'slot';
         break;
       case 'LockFeed':
+        // Lock feed targets the feed zone
         profile.feedZone = true;
         profile.requiresTarget = false;
+        profile.targetType = 'zone';
         break;
       case 'Tax':
       case 'ManaBurn':
+        // These target the opponent directly (via their kitchen zone)
         profile.enemyKitchenZone = true;
         profile.requiresTarget = false;
+        profile.targetType = 'zone';
         break;
       case 'ShuffleFeed':
       case 'WipeBottom':
+        // These target the feed zone
         profile.feedZone = true;
         profile.requiresTarget = false;
+        profile.targetType = 'zone';
         break;
       case 'ResurrectLast':
       case 'SpawnShitposts':
       case 'DiscountNext':
+        // Self-targeting, no target needed
         profile.requiresTarget = false;
+        profile.targetType = 'none';
         break;
       default:
         break;
     }
     return profile;
   };
+
+  // Track opponent exploits when turn resolves
+  useEffect(() => {
+    if (!game || !mySeat || !opponentPlayer) return;
+
+    // Check if opponent has revealed exploits
+    const opponentCommit = opponentPlayer.commit;
+    if (opponentCommit?.revealed && opponentCommit.revealed.exploits.length > 0) {
+      // Show opponent exploits for 5 seconds
+      setOpponentExploits(opponentCommit.revealed.exploits);
+
+      // Clear previous timer
+      if (opponentExploitTimer.current) {
+        clearTimeout(opponentExploitTimer.current);
+      }
+
+      // Set timer to hide exploits after 5 seconds
+      opponentExploitTimer.current = window.setTimeout(() => {
+        setOpponentExploits([]);
+        opponentExploitTimer.current = null;
+      }, 5000);
+    }
+
+    return () => {
+      if (opponentExploitTimer.current) {
+        clearTimeout(opponentExploitTimer.current);
+      }
+    };
+  }, [game?.turn, opponentPlayer?.commit?.revealed]);
 
   useEffect(() => {
     if (!pendingReveal || !game || !mySeat) return;
@@ -699,7 +809,7 @@ function App() {
     if (!card) return;
     const meta = getPlayableMeta(card);
     if (!meta.canPlay || !meta.targets.kitchen) {
-      flashNoPlay(cardId);
+      flashNoPlay(cardId, 'dropToKitchen:memeConditions');
       return;
     }
     setDraftPlan((prev) => {
@@ -714,7 +824,7 @@ function App() {
     if (!card) return;
     const meta = getPlayableMeta(card);
     if (!meta.canPlay || !meta.targets.feed) {
-      flashNoPlay(cardId);
+      flashNoPlay(cardId, 'dropToFeed:memeConditions');
       return;
     }
     setDraftPlan((prev) => {
@@ -724,16 +834,61 @@ function App() {
   };
 
   const canUseExploitOnCard = (exploit: LiveCard, targetCard: LiveCard) => {
-    const profile = getExploitTargetProfile(getExploitEffect(exploit));
+    const debugInfo: any = {
+      exploitName: exploit?.name,
+      exploitId: exploit?.id,
+      targetCardName: targetCard?.name,
+      targetCardId: targetCard?.id,
+      targetOwner: targetCard?.owner,
+      targetLocation: targetCard?.location,
+      mySeat,
+    };
+
+    if (!mySeat) {
+      console.log('❌ canUseExploitOnCard FAIL: mySeat is null', debugInfo);
+      return false;
+    }
+
+    const effect = getExploitEffect(exploit);
+    debugInfo.effect = effect;
+    debugInfo.effectType = effect ? (typeof effect === 'string' ? effect : Object.keys(effect)[0]) : 'NULL';
+
+    if (!effect) {
+      console.log('❌ canUseExploitOnCard FAIL: effect is null', debugInfo);
+      return false;
+    }
+
+    const profile = getExploitTargetProfile(effect);
+    debugInfo.profile = profile;
+
     const isEnemy = targetCard.owner !== mySeat;
     const inFeed = targetCard.location === 'feed';
     const inKitchen = targetCard.location === 'kitchen';
+
+    debugInfo.isEnemy = isEnemy;
+    debugInfo.inFeed = inFeed;
+    debugInfo.inKitchen = inKitchen;
+
     if (isEnemy) {
-      if (inKitchen && profile.enemyKitchenCard) return true;
-      if (inFeed && profile.enemyFeedCard) return true;
+      if (inKitchen && profile.enemyKitchenCard) {
+        console.log('✅ canUseExploitOnCard SUCCESS: enemy kitchen card', debugInfo);
+        return true;
+      }
+      if (inFeed && profile.enemyFeedCard) {
+        console.log('✅ canUseExploitOnCard SUCCESS: enemy feed card', debugInfo);
+        return true;
+      }
+      console.log('❌ canUseExploitOnCard FAIL: isEnemy but no match', debugInfo);
     } else {
-      if (inKitchen && profile.allyKitchenCard) return true;
-      if (inFeed && profile.allyFeedCard) return true;
+      if (inKitchen && profile.allyKitchenCard) {
+        console.log('✅ canUseExploitOnCard SUCCESS: ally kitchen card', debugInfo);
+        return true;
+      }
+      if (inFeed && profile.allyFeedCard) {
+        console.log('✅ canUseExploitOnCard SUCCESS: ally feed card', debugInfo);
+        return true;
+      }
+      console.log('❌ canUseExploitOnCard FAIL: isAlly but no match', debugInfo);
     }
     return false;
   };
@@ -752,22 +907,50 @@ function App() {
   };
 
   const planExploitOnCard = (targetCard: LiveCard) => {
-    if (!draggingId) return;
+    console.log('planExploitOnCard called:', {
+      draggingId,
+      targetCard: targetCard.name,
+      planLocked
+    });
+
+    if (!draggingId) {
+      console.log('No draggingId!');
+      return;
+    }
+
     const exploit = playerHand.find((c) => c.id === draggingId && c.kind === 'Exploit');
-    if (!exploit) return;
+    console.log('Found exploit:', exploit?.name);
+
+    if (!exploit) {
+      console.log('Exploit not found in hand!');
+      return;
+    }
+
     if (planLocked) {
-      flashNoPlay(exploit.id);
+      console.log('Plan is locked!');
+      flashNoPlay(exploit.id, 'planExploitOnCard:planLocked');
       return;
     }
+
     const meta = getPlayableMeta(exploit);
+    console.log('Playable meta:', meta);
+
     if (!meta.canPlay) {
-      flashNoPlay(exploit.id);
+      console.log('Meta says cannot play!');
+      flashNoPlay(exploit.id, 'planExploitOnCard:!canPlay');
       return;
     }
-    if (!canUseExploitOnCard(exploit, targetCard)) {
-      flashNoPlay(exploit.id);
+
+    const canUse = canUseExploitOnCard(exploit, targetCard);
+    console.log('canUseExploitOnCard result:', canUse);
+
+    if (!canUse) {
+      console.log('Cannot use exploit on this card!');
+      flashNoPlay(exploit.id, 'planExploitOnCard:!canUse');
       return;
     }
+
+    console.log('Queueing exploit!');
     queueExploit(exploit.id, { Card: targetCard.id });
   };
 
@@ -776,13 +959,13 @@ function App() {
     const exploit = playerHand.find((c) => c.id === draggingId && c.kind === 'Exploit');
     if (!exploit) return;
     if (planLocked) {
-      flashNoPlay(exploit.id);
+      flashNoPlay(exploit.id, 'planExploitOnFeedSlot:planLocked');
       return;
     }
     const meta = getPlayableMeta(exploit);
     const profile = getExploitTargetProfile(getExploitEffect(exploit));
     if (!meta.canPlay || !profile.feedSlot || !canUseExploitOnSlot(exploit)) {
-      flashNoPlay(exploit.id);
+      flashNoPlay(exploit.id, 'planExploitOnFeedSlot:conditions');
       return;
     }
     queueExploit(exploit.id, { FeedSlot: slot });
@@ -793,17 +976,17 @@ function App() {
     const exploit = playerHand.find((c) => c.id === draggingId && c.kind === 'Exploit');
     if (!exploit) return;
     if (planLocked) {
-      flashNoPlay(exploit.id);
+      flashNoPlay(exploit.id, 'planExploitZoneEnemyKitchen:planLocked');
       return;
     }
     const meta = getPlayableMeta(exploit);
     if (!meta.canPlay) {
-      flashNoPlay(exploit.id);
+      flashNoPlay(exploit.id, 'planExploitZoneEnemyKitchen:!canPlay');
       return;
     }
     const profile = getExploitTargetProfile(getExploitEffect(exploit));
     if (!profile.enemyKitchenZone) {
-      flashNoPlay(exploit.id);
+      flashNoPlay(exploit.id, 'planExploitZoneEnemyKitchen:!zoneTargeting');
       return;
     }
     queueExploit(exploit.id, 'EnemyKitchen' as any);
@@ -823,8 +1006,10 @@ function App() {
     setHoverZone(null);
   };
 
-  const flashNoPlay = (cardId?: string) => {
+  const flashNoPlay = (cardId?: string, source?: string) => {
     const targetId = cardId ?? heldCard;
+    console.log('🚫 flashNoPlay called:', { cardId, heldCard, targetId, source });
+    console.trace('flashNoPlay trace');
     if (!targetId) return;
     setNoPlayCardId(targetId);
     window.setTimeout(() => setNoPlayCardId((current) => (current === targetId ? null : current)), 420);
@@ -867,12 +1052,18 @@ function App() {
         (profile.enemyKitchenZone && hasEnemyKitchenCard) ||
         (profile.feedZone && (hasFeed || !profile.requiresTarget)) ||
         !profile.requiresTarget;
-      const feedTargeting = profile.feedSlot || profile.feedZone || profile.enemyFeedCard || profile.allyFeedCard;
-      const enemyTargeting = profile.enemyKitchenCard || profile.enemyFeedCard || profile.enemyKitchenZone;
-      const kitchenTargeting = profile.allyKitchenCard;
+      // Feed zone targeting: only highlight for zone/slot-targeting exploits
+      // Card-targeting exploits for feed should target individual cards
+      const feedZoneTargeting = profile.feedSlot || profile.feedZone;
+      // Only show enemy zone highlight for zone-targeting exploits (not card-targeting)
+      // Card-targeting exploits should show individual cards as targets
+      const enemyZoneTargeting = profile.enemyKitchenZone;
+      // Kitchen zone is only for playing memes, not for buff exploits targeting kitchen cards
+      // Buff exploits should target individual cards in kitchen
+      const kitchenTargeting = false; // Exploits never target kitchen zone
       return {
         canPlay: mana >= costWithDiscount(card) && hasTarget,
-        targets: { kitchen: kitchenTargeting, feed: feedTargeting, enemy: enemyTargeting },
+        targets: { kitchen: kitchenTargeting, feed: feedZoneTargeting, enemy: enemyZoneTargeting },
       };
     }
     return { canPlay: false, targets: { kitchen: false, feed: false, enemy: false } };
@@ -891,17 +1082,24 @@ function App() {
       }
       setHoldTargets({ feed: false, kitchen: false, enemy: false });
       setHoverZone(null);
-      flashNoPlay(card.id);
+      flashNoPlay(card.id, 'holdTimer:!canPlay');
     }, 220);
   };
 
   const onDragStart = (cardId: string, source: 'hand' | 'kitchen') => (event: DragEvent) => {
+    console.log('🚀 onDragStart:', { cardId, source });
+    clearHoldTimer(); // Clear the hold preview timer to prevent flashNoPlay during drag
+    setHeldCard(null);
     setDraggingId(cardId);
     setIsPointerDragging(false);
+    nativeDragActive.current = true; // Mark native drag as active
     event.dataTransfer.setData('text/plain', cardId);
   };
 
   const onDragEnd = () => {
+    console.log('onDragEnd called - clearing dragging state');
+    // Note: Don't reset nativeDragActive here - pointerup may fire after dragend
+    // It will be reset in the next onPointerDown
     setDraggingId(null);
     setIsPointerDragging(false);
     endHoldPreview();
@@ -925,6 +1123,36 @@ function App() {
       return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
     };
     const handlePointerUp = (evt: PointerEvent) => {
+      console.log('👆 handlePointerUp called:', {
+        nativeDragActive: nativeDragActive.current,
+        draggingId,
+        hoverZone,
+        hoverTargetCard: hoverTargetCard?.name,
+      });
+      // Skip if native HTML5 drag is handling this
+      if (nativeDragActive.current) {
+        console.log('🔄 Skipping pointerUp - native drag is active');
+        return;
+      }
+
+      // Check if we're dropping an exploit on a specific card target
+      if (draggingId && hoverTargetCard) {
+        const exploit = playerHand.find((c) => c.id === draggingId && c.kind === 'Exploit');
+        if (exploit) {
+          console.log('🎯 Pointer exploit drop on card:', {
+            exploitName: exploit.name,
+            targetCard: hoverTargetCard.name,
+          });
+          planExploitOnCard(hoverTargetCard);
+          setHoverZone(null);
+          setHoverTargetCard(null);
+          setDraggingId(null);
+          setIsPointerDragging(false);
+          endHoldPreview();
+          return;
+        }
+      }
+
       let zone: 'feed' | 'kitchen' | null = hoverZone;
       if (!zone) {
         if (isPointInRect(feedZoneRef.current, evt.clientX, evt.clientY)) {
@@ -936,9 +1164,10 @@ function App() {
       if (zone && draggingId) {
         performDrop(zone, draggingId);
       } else if (draggingId) {
-        flashNoPlay(draggingId);
+        flashNoPlay(draggingId, 'pointerUp:noZone');
       }
       setHoverZone(null);
+      setHoverTargetCard(null);
       setDraggingId(null);
       setIsPointerDragging(false);
       endHoldPreview();
@@ -953,11 +1182,12 @@ function App() {
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointermove', handlePointerMove);
     };
-  }, [isPointerDragging, draggingId, hoverZone]);
+  }, [isPointerDragging, draggingId, hoverZone, hoverTargetCard, playerHand]);
 
   const performDrop = (zone: 'feed' | 'kitchen', cardId: string) => {
+    console.log('📦 performDrop called:', { zone, cardId, draggingCard: draggingCard?.name });
     if (planLocked) {
-      flashNoPlay(cardId);
+      flashNoPlay(cardId, 'performDrop:planLocked');
       return;
     }
     const card =
@@ -969,7 +1199,7 @@ function App() {
       meta.canPlay &&
       ((zone === 'kitchen' && meta.targets.kitchen) || (zone === 'feed' && (meta.targets.feed || meta.targets.enemy)));
     if (!allowed) {
-      flashNoPlay(cardId);
+      flashNoPlay(cardId, 'performDrop:notAllowed');
       return;
     }
     scrubFromPlan(cardId);
@@ -977,7 +1207,7 @@ function App() {
       dropToKitchen(cardId);
     } else {
       if (card.kind === 'Exploit') {
-        flashNoPlay(cardId);
+        flashNoPlay(cardId, 'performDrop:exploitOnFeed');
         return;
       }
       dropToFeedFromKitchen(cardId);
@@ -995,11 +1225,15 @@ function App() {
   };
 
   const handleKitchenDrop = (event: DragEvent) => {
+    console.log('🍳 handleKitchenDrop called:', {
+      cardId: event.dataTransfer.getData('text/plain') || draggingId,
+      draggingCard: draggingCard?.name,
+    });
     event.preventDefault();
     const cardId = event.dataTransfer.getData('text/plain') || draggingId;
     if (!cardId) return;
     if (planLocked) {
-      flashNoPlay(cardId);
+      flashNoPlay(cardId, 'handleKitchenDrop:planLocked');
       return;
     }
     performDrop('kitchen', cardId);
@@ -1012,7 +1246,7 @@ function App() {
     const cardId = event.dataTransfer.getData('text/plain') || draggingId;
     if (!cardId) return;
     if (planLocked) {
-      flashNoPlay(cardId);
+      flashNoPlay(cardId, 'handleFeedDrop:planLocked');
       return;
     }
     const card =
@@ -1023,7 +1257,7 @@ function App() {
       if (meta.canPlay && profile.feedZone) {
         queueExploit(card.id, null);
       } else {
-        flashNoPlay(card.id);
+        flashNoPlay(card.id, 'handleFeedDrop:exploitNoZone');
       }
       setHoverZone(null);
       endHoldPreview();
@@ -1035,22 +1269,27 @@ function App() {
   };
 
   const handleEnemyKitchenDrop = (event: DragEvent) => {
+    console.log('🏠 handleEnemyKitchenDrop called:', {
+      draggingCard: draggingCard?.name,
+      draggingCardKind: draggingCard?.kind,
+    });
     event.preventDefault();
     if (planLocked) return;
     if (!draggingCard || draggingCard.kind !== 'Exploit') {
-      flashNoPlay();
+      flashNoPlay(undefined, 'handleEnemyKitchenDrop:notExploit');
       return;
     }
     const profile = getExploitTargetProfile(getExploitEffect(draggingCard));
     const meta = getPlayableMeta(draggingCard);
     if (!meta.canPlay) {
-      flashNoPlay(draggingCard.id);
+      flashNoPlay(draggingCard.id, 'handleEnemyKitchenDrop:!canPlay');
       return;
     }
     if (profile.enemyKitchenZone) {
       planExploitZoneEnemyKitchen();
     } else {
-      flashNoPlay(draggingCard.id);
+      console.log('🏠 handleEnemyKitchenDrop: not zone-targeting exploit, flashing');
+      flashNoPlay(draggingCard.id, 'handleEnemyKitchenDrop:!zoneTargeting');
     }
     setHoverZone(null);
     endHoldPreview();
@@ -1388,7 +1627,7 @@ function App() {
             onDragStart={(e) => {
               if (planLocked) {
                 e.preventDefault();
-                flashNoPlay(card.id);
+                flashNoPlay(card.id, 'handCard:onDragStart:planLocked');
                 return;
               }
               endHoldPreview();
@@ -1398,8 +1637,9 @@ function App() {
             onContextMenu={(e) => e.preventDefault()}
             onPointerDown={(e) => {
               e.preventDefault();
+              nativeDragActive.current = false; // Reset for new drag operation
               if (planLocked) {
-                flashNoPlay(card.id);
+                flashNoPlay(card.id, 'handCard:onPointerDown:planLocked');
                 return;
               }
               setDraggingId(card.id);
@@ -1437,48 +1677,120 @@ function App() {
     dropHandler?: any,
     planned: LiveCard[] = [],
     statusText?: string,
-  ) => (
-    <div
-      className={`kitchen-row ${tone}`}
-      onDragOver={(e) => dropHandler && e.preventDefault()}
-      onDrop={dropHandler}
-    >
-      <div className="kitchen-label-row">
-        <div className="kitchen-label">{label}</div>
-        {statusText && <span className="status-flag flash">{statusText}</span>}
-      </div>
-      <div className="kitchen-cards row">
-        {cards.map((card) => (
-          <div
-            key={card.id}
-            className={`kitchen-card surface ${queuedPosts.has(card.id) ? 'queued' : ''} ${
-              draggingId === card.id ? 'dragging' : ''
-            } ${noPlayCardId === card.id ? 'no-play' : ''}`}
-            draggable={tone === 'green'}
-            onDragOver={(e) => {
-              const draggingExploit =
-                draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
-              if (draggingExploit && draggingId && draggingCard && canUseExploitOnCard(draggingCard, card)) {
-                e.preventDefault();
-              }
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const draggingExploit =
-                draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
-              if (draggingExploit && draggingCard) {
-                planExploitOnCard(card);
-                setHoverZone(null);
-                endHoldPreview();
-                return;
-              }
-            }}
+  ) => {
+    // Get exploit targets for this kitchen
+    const exploitTargets = new Map<string, string[]>();
+    draftPlan.exploits.forEach((exploit) => {
+      if (exploit.target && typeof exploit.target === 'object' && 'Card' in exploit.target) {
+        const targetId = exploit.target.Card;
+        if (!exploitTargets.has(targetId)) {
+          exploitTargets.set(targetId, []);
+        }
+        exploitTargets.get(targetId)?.push(exploit.card_id);
+      }
+    });
+
+    return (
+      <div
+        className={`kitchen-row ${tone}`}
+        onDragOver={(e) => dropHandler && e.preventDefault()}
+        onDrop={dropHandler}
+      >
+        <div className="kitchen-label-row">
+          <div className="kitchen-label">{label}</div>
+          {statusText && <span className="status-flag flash">{statusText}</span>}
+        </div>
+        <div className="kitchen-cards row">
+          {cards.map((card) => {
+            const targetedByExploits = exploitTargets.get(card.id) || [];
+            const isDragTarget = draggingCard && draggingCard.kind === 'Exploit' &&
+                               draggingCard.location === 'hand' && canUseExploitOnCard(draggingCard, card);
+
+            // Debug: log when rendering with a dragging card
+            if (draggingCard && tone === 'red') {
+              console.log(`🎯 Rendering ${tone} kitchen card:`, {
+                cardName: card.name,
+                cardLocation: card.location,
+                cardOwner: card.owner,
+                draggingCardName: draggingCard.name,
+                draggingCardKind: draggingCard.kind,
+                draggingCardLocation: draggingCard.location,
+                isDragTarget,
+              });
+            }
+
+            return (
+              <div
+                key={card.id}
+                className={`kitchen-card surface ${queuedPosts.has(card.id) ? 'queued' : ''} ${
+                  draggingId === card.id ? 'dragging' : ''
+                } ${noPlayCardId === card.id ? 'no-play' : ''} ${
+                  targetedByExploits.length > 0 ? 'exploit-target' : ''
+                } ${isDragTarget ? 'valid-target' : ''}`}
+                draggable={tone === 'green'}
+                onDragOver={(e) => {
+                  // Always log for debugging
+                  console.log(`🔄 CARD onDragOver (${tone}):`, {
+                    cardName: card.name,
+                    cardOwner: card.owner,
+                    tone,
+                    draggingId,
+                    hasDraggingCard: !!draggingCard,
+                    draggingCardName: draggingCard?.name,
+                  });
+
+                  const draggingExploit =
+                    draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
+                  const canUse = draggingExploit && draggingId && draggingCard && canUseExploitOnCard(draggingCard, card);
+
+                  console.log(`🔄 CARD onDragOver result (${tone}):`, {
+                    cardName: card.name,
+                    draggingExploit,
+                    canUse,
+                    willPreventDefault: canUse,
+                  });
+
+                  if (canUse) {
+                    e.preventDefault();
+                    e.stopPropagation(); // Stop event from bubbling to lane
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation(); // Prevent bubbling to zone handler
+                  console.log('onDrop triggered for card:', card.name, {
+                    draggingCard: draggingCard?.name,
+                    draggingCardKind: draggingCard?.kind,
+                    draggingCardLocation: draggingCard?.location,
+                    tone
+                  });
+
+                  const draggingExploit =
+                    draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
+
+                  console.log('draggingExploit check:', {
+                    draggingCard: !!draggingCard,
+                    isExploit: draggingCard?.kind === 'Exploit',
+                    isInHand: draggingCard?.location === 'hand',
+                    result: draggingExploit
+                  });
+
+                  if (draggingExploit && draggingCard) {
+                    console.log('Calling planExploitOnCard for:', card.name);
+                    planExploitOnCard(card);
+                    setHoverZone(null);
+                    endHoldPreview();
+                    return;
+                  } else {
+                    console.log('Not calling planExploitOnCard - conditions not met');
+                  }
+                }}
             onDragStart={
               tone === 'green'
                 ? (e) => {
                     if (planLocked) {
                       e.preventDefault();
-                      flashNoPlay(card.id);
+                      flashNoPlay(card.id, 'kitchenCard:onDragStart:planLocked');
                       return;
                     }
                     onDragStart(card.id, 'kitchen')(e);
@@ -1491,8 +1803,9 @@ function App() {
               tone === 'green'
                 ? (e) => {
                     e.preventDefault();
+                    nativeDragActive.current = false; // Reset for new drag operation
                     if (planLocked) {
-                      flashNoPlay(card.id);
+                      flashNoPlay(card.id, 'kitchenCard:onPointerDown:planLocked');
                       return;
                     }
                     setDraggingId(card.id);
@@ -1511,19 +1824,49 @@ function App() {
                   }
                 : undefined
             }
-            onPointerLeave={tone === 'green' ? endHoldPreview : undefined}
+            onPointerEnter={() => {
+              // When dragging an exploit over a card, track it as the target
+              if (draggingId && draggingCard?.kind === 'Exploit' && canUseExploitOnCard(draggingCard, card)) {
+                console.log('🎯 onPointerEnter - setting target card:', card.name);
+                setHoverTargetCard(card);
+              }
+            }}
+            onPointerLeave={() => {
+              // Clear target card when leaving
+              if (hoverTargetCard?.id === card.id) {
+                console.log('🎯 onPointerLeave - clearing target card:', card.name);
+                setHoverTargetCard(null);
+              }
+              // Also handle hold preview for green cards
+              if (tone === 'green') {
+                endHoldPreview();
+              }
+            }}
             onClick={() => {
               if (isPointerDragging) return;
               handleInspectCard(card);
             }}
           >
-            <div className="card-top">
-              <span className="pill quiet">{card.cost}</span>
-              <span className="pill quiet">{card.currentVirality}</span>
-            </div>
-            <p className="card-name">{card.name}</p>
-          </div>
-        ))}
+                <div className="card-top">
+                  <span className="pill quiet">{card.cost}</span>
+                  <span className="pill quiet">{card.currentVirality}</span>
+                </div>
+                <p className="card-name">{card.name}</p>
+                {targetedByExploits.length > 0 && (
+                  <div className="exploit-indicators">
+                    {targetedByExploits.map((exploitId, idx) => {
+                      const exploit = playerHand.find(h => h.id === exploitId);
+                      return exploit ? (
+                        <span key={`ex-${idx}`} className="exploit-indicator" title={exploit.name}>
+                          ⚡
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         {planned.map((card) => (
           <div key={`plan-${card.id}`} className={`kitchen-card surface pending ${planLocked ? 'locked' : ''}`}>
             <div className="card-top">
@@ -1547,7 +1890,8 @@ function App() {
         {cards.length === 0 && planned.length === 0 && <p className="muted small">Empty</p>}
       </div>
     </div>
-  );
+    );
+  };
 
   const playerScore = myPlayer?.score ?? 0;
   const opponentScore = opponentPlayer?.score ?? 0;
@@ -1617,19 +1961,36 @@ function App() {
               hoverZone === 'feed' ? 'drop-hot' : ''
             }`}
             onDragOver={(e) => {
+              console.log('🏠 LANE onDragOver (enemy-lane):', {
+                target: (e.target as HTMLElement).className,
+                currentTarget: (e.currentTarget as HTMLElement).className,
+                draggingCard: draggingCard?.name,
+              });
+              // Only allow zone-targeting exploits on the enemy lane zone
+              // Card-targeting exploits should be dropped on individual cards
               const allowZone =
                 draggingCard &&
                 draggingCard.kind === 'Exploit' &&
                 draggingCard.location === 'hand' &&
                 getExploitTargetProfile(getExploitEffect(draggingCard)).enemyKitchenZone &&
                 getPlayableMeta(draggingCard).canPlay;
-              if (allowZone || canHoverZone('feed')) {
+              if (allowZone) {
                 e.preventDefault();
                 setHoverZone('feed');
               }
             }}
             onDragLeave={() => setHoverZone(null)}
-            onPointerEnter={() => canHoverZone('feed') && onPointerEnterZone('feed')()}
+            onPointerEnter={() => {
+              // Only show hold preview for zone-targeting exploits on enemy lane
+              if (!draggingId) return;
+              const card = playerHand.find((c) => c.id === draggingId);
+              if (card && card.kind === 'Exploit') {
+                const profile = getExploitTargetProfile(getExploitEffect(card));
+                if (profile.enemyKitchenZone && getPlayableMeta(card).canPlay) {
+                  onPointerEnterZone('feed')();
+                }
+              }
+            }}
             onPointerLeave={onPointerLeaveZone}
             onDrop={handleEnemyKitchenDrop}
           >
@@ -1637,7 +1998,7 @@ function App() {
               enemyKitchen,
               'red',
               'Enemy Kitchen',
-              undefined,
+              undefined,  // Zone drop handler stays undefined since we handle per-card
               [],
               opponentWaitingOnMe ? 'Opponent waiting for you…' : undefined,
             )}
@@ -1657,14 +2018,37 @@ function App() {
             onPointerEnter={() => canHoverZone('feed') && onPointerEnterZone('feed')()}
             onPointerLeave={onPointerLeaveZone}
           >
-            <div className="feed-prompt">What’s happening?</div>
+            <div className="feed-prompt">What's happening?</div>
             <div className="feed-stack">
-              {feedCards.map((card, idx) => (
-                <div
-                  key={card.id}
-                  className={`feed-pill surface ${card.owner === mySeat ? 'mine' : 'enemy'}`}
+              {feedCards.map((card, idx) => {
+                const isTargetedByExploit = draftPlan.exploits.some(
+                  e => e.target && typeof e.target === 'object' && 'Card' in e.target && e.target.Card === card.id
+                );
+                const isDragTarget = draggingCard && draggingCard.kind === 'Exploit' &&
+                                   draggingCard.location === 'hand' && canUseExploitOnCard(draggingCard, card);
+
+                return (
+                  <div
+                    key={card.id}
+                    className={`feed-pill surface ${card.owner === mySeat ? 'mine' : 'enemy'} ${
+                      isTargetedByExploit ? 'exploit-target' : ''
+                    } ${isDragTarget ? 'valid-target' : ''}`}
                   onClick={() => handleInspectCard(card)}
                   onContextMenu={(e) => e.preventDefault()}
+                  onPointerEnter={() => {
+                    // When dragging an exploit over a feed card, track it as the target
+                    if (draggingId && draggingCard?.kind === 'Exploit' && canUseExploitOnCard(draggingCard, card)) {
+                      console.log('🎯 feed card onPointerEnter - setting target card:', card.name);
+                      setHoverTargetCard(card);
+                    }
+                  }}
+                  onPointerLeave={() => {
+                    // Clear target card when leaving
+                    if (hoverTargetCard?.id === card.id) {
+                      console.log('🎯 feed card onPointerLeave - clearing target card:', card.name);
+                      setHoverTargetCard(null);
+                    }
+                  }}
                   onDragOver={(e) => {
                     const draggingExploit =
                       draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
@@ -1681,6 +2065,7 @@ function App() {
                   }}
                   onDrop={(e) => {
                     e.preventDefault();
+                    e.stopPropagation(); // Prevent bubbling to feed zone handler
                     const draggingExploit =
                       draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
                     const draggingMeme =
@@ -1692,7 +2077,7 @@ function App() {
                       } else if (profile.feedSlot && canUseExploitOnSlot(draggingCard)) {
                         planExploitOnFeedSlot(idx);
                       } else {
-                        flashNoPlay(draggingCard.id);
+                        flashNoPlay(draggingCard.id, 'feedCard:onDrop:noMatch');
                       }
                       setHoverZone(null);
                       endHoldPreview();
@@ -1703,11 +2088,15 @@ function App() {
                     }
                   }}
                 >
-                  <span className="feed-prefix">#{idx + 1}</span>
-                  <span className="feed-name ellipsis">{card.name}</span>
-                  <span className="feed-virality">{card.currentVirality}</span>
-                </div>
-              ))}
+                    <span className="feed-prefix">#{idx + 1}</span>
+                    <span className="feed-name ellipsis">{card.name}</span>
+                    <span className="feed-virality">{card.currentVirality}</span>
+                    {isTargetedByExploit && (
+                      <span className="exploit-indicator-small" title="Targeted by exploit">⚡</span>
+                    )}
+                  </div>
+                );
+              })}
               {plannedFeedPosts.map((card, idx) => (
                 <div
                   key={`plan-feed-${card.id}-${idx}`}
@@ -1762,11 +2151,21 @@ function App() {
             }`}
             ref={kitchenZoneRef}
             onDragOver={(e) => {
+              console.log('🏠 LANE onDragOver (player-lane):', {
+                target: (e.target as HTMLElement).className,
+                draggingCard: draggingCard?.name,
+              });
               e.preventDefault();
               if (canHoverZone('kitchen')) setHoverZone('kitchen');
             }}
             onDragLeave={() => setHoverZone(null)}
-            onDrop={handleKitchenDrop}
+            onDrop={(e) => {
+              console.log('🏠 LANE onDrop (player-lane):', {
+                target: (e.target as HTMLElement).className,
+                draggingCard: draggingCard?.name,
+              });
+              handleKitchenDrop(e);
+            }}
             onPointerEnter={() => canHoverZone('kitchen') && onPointerEnterZone('kitchen')()}
             onPointerLeave={onPointerLeaveZone}
           >
@@ -2124,6 +2523,29 @@ function App() {
       {renderModalCard()}
       {basedPulseKey && <div key={basedPulseKey} className="based-ripple" />}
       {basedModalPulse && <div key={`modal-${basedModalPulse}`} className="based-ripple modal-ripple" />}
+      {opponentExploits.length > 0 && (
+        <div className="opponent-exploit-notification">
+          <div className="notification-header">Opponent played exploits!</div>
+          <div className="exploit-list">
+            {opponentExploits.map((exploit, idx) => {
+              const targetDesc = exploit.target
+                ? typeof exploit.target === 'object' && 'Card' in exploit.target
+                  ? 'targeting card'
+                  : typeof exploit.target === 'object' && 'FeedSlot' in exploit.target
+                  ? `targeting slot #${exploit.target.FeedSlot + 1}`
+                  : 'on zone'
+                : '';
+
+              return (
+                <div key={idx} className="exploit-notification-item">
+                  <span className="exploit-icon">⚡</span>
+                  <span>{exploit.card_id || 'Exploit'} {targetDesc}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
