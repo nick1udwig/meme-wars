@@ -84,6 +84,29 @@ impl GameState {
         }
     }
 
+    pub fn check_win_condition(&self) -> Option<Seat> {
+        let host = self.players.iter().find(|p| p.seat == Seat::Host)?;
+        let opp = self.players.iter().find(|p| p.seat == Seat::Opponent)?;
+
+        // Check if either player has reached the winning score
+        let host_won = host.score >= SCORE_TO_WIN;
+        let opp_won = opp.score >= SCORE_TO_WIN;
+
+        match (host_won, opp_won) {
+            (true, true) => {
+                // Both reached target - higher score wins, tie goes to host
+                if opp.score > host.score {
+                    Some(Seat::Opponent)
+                } else {
+                    Some(Seat::Host)
+                }
+            }
+            (true, false) => Some(Seat::Host),
+            (false, true) => Some(Seat::Opponent),
+            (false, false) => None,
+        }
+    }
+
     pub fn plan_for(&self, seat: Seat) -> Option<TurnPlan> {
         self.players
             .iter()
@@ -205,6 +228,14 @@ impl GameState {
         self.apply_feed_yield();
         self.apply_cook_and_decay();
         self.cleanup_board();
+
+        // Check for win condition
+        if let Some(winner) = self.check_win_condition() {
+            self.winner = Some(winner);
+            self.phase = Phase::GameOver;
+            return Ok(());
+        }
+
         self.turn += 1;
         self.initiative = self.initiative.other();
         for player in self.players.iter_mut() {

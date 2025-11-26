@@ -1064,9 +1064,9 @@ function App() {
         (profile.enemyKitchenZone && hasEnemyKitchenCard) ||
         (profile.feedZone && (hasFeed || !profile.requiresTarget)) ||
         !profile.requiresTarget;
-      // Feed zone targeting: only highlight for zone/slot-targeting exploits
+      // Feed zone targeting: zone/slot-targeting exploits AND no-target exploits
       // Card-targeting exploits for feed should target individual cards
-      const feedZoneTargeting = profile.feedSlot || profile.feedZone;
+      const feedZoneTargeting = profile.feedSlot || profile.feedZone || !profile.requiresTarget;
       // Only show enemy zone highlight for zone-targeting exploits (not card-targeting)
       // Card-targeting exploits should show individual cards as targets
       const enemyZoneTargeting = profile.enemyKitchenZone;
@@ -1268,7 +1268,8 @@ function App() {
     if (card && card.kind === 'Exploit') {
       const profile = getExploitTargetProfile(getExploitEffect(card));
       const meta = getPlayableMeta(card);
-      if (meta.canPlay && profile.feedZone) {
+      // Allow dropping if exploit targets feed zone OR doesn't require a target
+      if (meta.canPlay && (profile.feedZone || !profile.requiresTarget)) {
         queueExploit(card.id, null);
       } else {
         flashNoPlay(card.id, 'handleFeedDrop:exploitNoZone');
@@ -1945,26 +1946,22 @@ function App() {
             <button className="ghost-btn compact" onClick={handleEndTurn} disabled={endTurnDisabled}>
               {endTurnLabel}
             </button>
-            <button
-              className={`based-btn compact ${basedButtonDisabled ? 'disabled' : ''}`}
-              onClick={handleCallBased}
-              disabled={basedButtonDisabled}
-            >
-              BASED
-            </button>
+            <div className="based-container">
+              <button
+                className={`based-btn compact ${basedButtonDisabled ? 'disabled' : ''}`}
+                onClick={handleCallBased}
+                disabled={basedButtonDisabled}
+              >
+                BASED
+              </button>
+              <span className="stakes-display">x{stakesMultiplier}</span>
+            </div>
             <button className="icon-btn tiny" aria-label="Settings" onClick={() => setShowSettingsModal(true)}>
               <Icon name="settings" size={16} />
             </button>
           </div>
         </div>
       </header>
-      {game?.winner && (
-        <div className="winner-banner surface">
-          <p className="card-name">
-            {game.winner === mySeat ? 'You win!' : 'Opponent wins.'} Stakes x{stakesMultiplier}
-          </p>
-        </div>
-      )}
 
       <div className="duel-stage">
         <section className="playfield surface">
@@ -2431,7 +2428,7 @@ function App() {
     return (
       <div className="modal-overlay" onClick={(e) => e.stopPropagation()}>
         <div className="search-modal surface based-modal">
-          <h3>Opponent called BASED: double-or-nothing.</h3>
+          <h3>Opponent called BASED. Call BASED to double stakes or retreat.</h3>
           <div className="stack">
             <button
               className="save-btn"
@@ -2440,7 +2437,7 @@ function App() {
                 await acceptBased(mySeat ?? 'Host');
               }}
             >
-              BASED (Double)
+              BASED
             </button>
             <button
               className="ghost-btn compact danger"
@@ -2449,10 +2446,28 @@ function App() {
                 await foldBased(mySeat ?? 'Host');
               }}
             >
-              Withdraw
+              Retreat
             </button>
           </div>
           <p className="muted small">Stakes: x{stakesMultiplier * 2}</p>
+        </div>
+      </div>
+    );
+  };
+
+  const renderWinLoseModal = () => {
+    if (!game?.winner) return null;
+    const isWinner = game.winner === mySeat;
+    return (
+      <div className="modal-overlay" onClick={(e) => e.stopPropagation()}>
+        <div className="search-modal surface win-lose-modal">
+          <h2 className={`win-lose-title ${isWinner ? 'win' : 'lose'}`}>
+            {isWinner ? 'You Win!' : 'You Lose'}
+          </h2>
+          <p className="muted">Stakes: x{stakesMultiplier}</p>
+          <button className="save-btn" onClick={handleLeaveGame}>
+            Leave Game
+          </button>
         </div>
       </div>
     );
@@ -2530,6 +2545,7 @@ function App() {
       {renderHostModal()}
       {renderSettingsModal()}
       {renderBasedModal()}
+      {renderWinLoseModal()}
       {renderModalCard()}
       {basedPulseKey && <div key={basedPulseKey} className="based-ripple" />}
       {basedModalPulse && <div key={`modal-${basedModalPulse}`} className="based-ripple modal-ripple" />}

@@ -12,4 +12,5 @@ pub const MANA_CAP: u8 = 10;
 pub const BASE_COOK: i32 = 1;
 pub const BASE_FEED_YIELD: i32 = 10;
 pub const FEED_YIELD_STEP: i32 = 5;
+pub const SCORE_TO_WIN: i32 = 30;
 pub const WS_PATH: &str = "/ws";

@@ -700,6 +700,14 @@
   font-size: 0.85rem;
 }
 
+.card-top {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
 .ellipsis {
   white-space: nowrap;
   overflow: hidden;
@@ -913,6 +921,21 @@
   pointer-events: none;
 }
 
+.based-container {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.stakes-display {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--accent);
+  background: rgba(241, 80, 123, 0.15);
+  padding: 0.1rem 0.25rem;
+  border-radius: var(--radius-sm);
+}
+
 .duel-top-actions .ghost-btn.compact,
 .duel-top-actions .based-btn {
   font-size: 0.72rem;
@@ -966,6 +989,25 @@
   color: var(--text);
   margin: 0.5rem 0;
   line-height: 1.4;
+}
+
+/* Win/Lose Modal */
+.win-lose-modal {
+  text-align: center;
+  padding: 2rem;
+}
+
+.win-lose-title {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.win-lose-title.win {
+  color: #4ade80;
+}
+
+.win-lose-title.lose {
+  color: #f87171;
 }
 
 /* Floating drag preview for exploits */
