@@ -104,6 +104,8 @@ export interface CardDefinition {
   id: string;
   name: string;
   cost: number;
+  description: string;
+  image?: string;
   class: CardKind;
 }
 

@@ -1,0 +1,793 @@
+[
+  {
+    "id": "n01",
+    "name": "Doge",
+    "cost": 1,
+    "description": "Such value. Much stat.",
+    "class": {
+      "Meme": {
+        "base_virality": 4,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "n02",
+    "name": "Cat Video",
+    "cost": 2,
+    "description": "The internet was built on this.",
+    "class": {
+      "Meme": {
+        "base_virality": 6,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "n03",
+    "name": "Success Kid",
+    "cost": 3,
+    "description": "Pure efficiency.",
+    "class": {
+      "Meme": {
+        "base_virality": 8,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "n04",
+    "name": "Disaster Girl",
+    "cost": 4,
+    "description": "Deal 2 dmg to meme below.",
+    "class": {
+      "Meme": {
+        "base_virality": 10,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPost",
+            "effect": { "DamageBelow": 2 }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "n05",
+    "name": "Gigachad",
+    "cost": 6,
+    "description": "The ultimate stat stick.",
+    "class": {
+      "Meme": {
+        "base_virality": 15,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "n06",
+    "name": "Repost",
+    "cost": 2,
+    "description": "Return last dead meme to Hand.",
+    "class": {
+      "Exploit": "ResurrectLast"
+    }
+  },
+  {
+    "id": "n07",
+    "name": "Viral Hit",
+    "cost": 3,
+    "description": "Give target +5 Virality.",
+    "class": {
+      "Exploit": { "Boost": 5 }
+    }
+  },
+  {
+    "id": "n08",
+    "name": "Lurker",
+    "cost": 2,
+    "description": "Cannot be targeted by Exploits in Kitchen.",
+    "class": {
+      "Meme": {
+        "base_virality": 4,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": ["Stealth"],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "n09",
+    "name": "First!",
+    "cost": 1,
+    "description": "Can Post to feed same turn it is played.",
+    "class": {
+      "Meme": {
+        "base_virality": 2,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": ["Haste"],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "n10",
+    "name": "This is Fine",
+    "cost": 3,
+    "description": "Loses 3 Virality every turn.",
+    "class": {
+      "Meme": {
+        "base_virality": 12,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [],
+        "volatile": 3,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "c01",
+    "name": "Let Him Cook",
+    "cost": 2,
+    "description": "Gains +3/turn instead of +1.",
+    "class": {
+      "Meme": {
+        "base_virality": 2,
+        "cook_rate": 3,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "c02",
+    "name": "Wojak",
+    "cost": 1,
+    "description": "Dies if it takes ANY damage.",
+    "class": {
+      "Meme": {
+        "base_virality": 1,
+        "cook_rate": 4,
+        "yield_rate": 1,
+        "keywords": ["Fragile"],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "c03",
+    "name": "Gordon",
+    "cost": 3,
+    "description": "Other memes in Kitchen get +2 cook rate.",
+    "class": {
+      "Meme": {
+        "base_virality": 4,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "AuraKitchen",
+            "effect": { "BuffOtherKitchen": 2 }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "c04",
+    "name": "Bread",
+    "cost": 1,
+    "description": "Spawns a copy of itself in Kitchen on play.",
+    "class": {
+      "Meme": {
+        "base_virality": 1,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPlayKitchen",
+            "effect": {
+              "Spawn": {
+                "variant_id": "c04",
+                "count": 1,
+                "location": "Kitchen"
+              }
+            }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "c05",
+    "name": "Diamond Hands",
+    "cost": 4,
+    "description": "Takes -2 damage from all sources.",
+    "class": {
+      "Meme": {
+        "base_virality": 5,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [{ "Shielded": { "amount": 2 } }],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "c06",
+    "name": "HODL",
+    "cost": 2,
+    "description": "Target meme becomes Immune this turn.",
+    "class": {
+      "Exploit": "Protect"
+    }
+  },
+  {
+    "id": "c07",
+    "name": "To The Moon",
+    "cost": 4,
+    "description": "Double a meme's current Virality.",
+    "class": {
+      "Exploit": "Double"
+    }
+  },
+  {
+    "id": "c08",
+    "name": "Oven Mitts",
+    "cost": 2,
+    "description": "Fully heals itself every turn in Kitchen.",
+    "class": {
+      "Meme": {
+        "base_virality": 3,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": ["HealKitchen"],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "c09",
+    "name": "Slowpoke",
+    "cost": 1,
+    "description": "Cannot Post for 3 turns.",
+    "class": {
+      "Meme": {
+        "base_virality": 6,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": 3
+      }
+    }
+  },
+  {
+    "id": "c10",
+    "name": "Sous Chef",
+    "cost": 2,
+    "description": "Give another meme +3 Virality immediately.",
+    "class": {
+      "Meme": {
+        "base_virality": 3,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPlayKitchen",
+            "effect": { "BuffSelf": 3 }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "t01",
+    "name": "Review Bomb",
+    "cost": 1,
+    "description": "Deal 3 dmg to enemy Kitchen meme.",
+    "class": {
+      "Exploit": {
+        "Damage": {
+          "amount": 3,
+          "target": "EnemyKitchen"
+        }
+      }
+    }
+  },
+  {
+    "id": "t02",
+    "name": "Dox",
+    "cost": 2,
+    "description": "Deal 5 dmg to enemy Kitchen meme.",
+    "class": {
+      "Exploit": {
+        "Damage": {
+          "amount": 5,
+          "target": "EnemyKitchen"
+        }
+      }
+    }
+  },
+  {
+    "id": "t03",
+    "name": "Cringe Compilation",
+    "cost": 4,
+    "description": "Deal 2 dmg to ALL enemy Kitchen memes.",
+    "class": {
+      "Exploit": { "AreaDamageKitchen": 2 }
+    }
+  },
+  {
+    "id": "t04",
+    "name": "Ratio + L",
+    "cost": 3,
+    "description": "Destroy any Feed meme with <5 Virality.",
+    "class": {
+      "Exploit": {
+        "NukeBelow": { "threshold": 5 }
+      }
+    }
+  },
+  {
+    "id": "t05",
+    "name": "Pepe",
+    "cost": 2,
+    "description": "Steal 2 Virality from meme below.",
+    "class": {
+      "Meme": {
+        "base_virality": 4,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPost",
+            "effect": { "DrainBelow": 2 }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "t06",
+    "name": "Trollface",
+    "cost": 3,
+    "description": "Swaps places with the meme below it.",
+    "class": {
+      "Meme": {
+        "base_virality": 5,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPost",
+            "effect": "SwapBelow"
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "t07",
+    "name": "Reply Guy",
+    "cost": 1,
+    "description": "Deal 1 dmg to opponent's Top Feed card.",
+    "class": {
+      "Meme": {
+        "base_virality": 2,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPost",
+            "effect": { "PingOpponentTop": 1 }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "t08",
+    "name": "FUD",
+    "cost": 2,
+    "description": "Target meme gets -3 Virality.",
+    "class": {
+      "Exploit": { "Debuff": 3 }
+    }
+  },
+  {
+    "id": "t09",
+    "name": "Cancel Culture",
+    "cost": 5,
+    "description": "Destroy target meme.",
+    "class": {
+      "Exploit": "Execute"
+    }
+  },
+  {
+    "id": "t10",
+    "name": "Soyjak",
+    "cost": 2,
+    "description": "Exploits must target this if able.",
+    "class": {
+      "Meme": {
+        "base_virality": 3,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": ["Taunt"],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "m01",
+    "name": "Ban Hammer",
+    "cost": 5,
+    "description": "Pushes the meme below it down 2 slots.",
+    "class": {
+      "Meme": {
+        "base_virality": 8,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPost",
+            "effect": { "Knockback": 2 }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "m02",
+    "name": "Pinned Post",
+    "cost": 2,
+    "description": "Target cannot move down this turn.",
+    "class": {
+      "Exploit": { "PinSlot": 0 }
+    }
+  },
+  {
+    "id": "m03",
+    "name": "Shadowban",
+    "cost": 3,
+    "description": "Target loses all text/abilities.",
+    "class": {
+      "Exploit": "Silence"
+    }
+  },
+  {
+    "id": "m04",
+    "name": "AutoMod",
+    "cost": 3,
+    "description": "Memes cost <3 cannot enter Feed above this.",
+    "class": {
+      "Meme": {
+        "base_virality": 6,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [{ "Gatekeeper": { "max_cost": 3 } }],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "m05",
+    "name": "Bump",
+    "cost": 1,
+    "description": "Move target Feed meme up 1 slot.",
+    "class": {
+      "Exploit": { "MoveUp": 1 }
+    }
+  },
+  {
+    "id": "m06",
+    "name": "Thread Locked",
+    "cost": 4,
+    "description": "No new memes can enter Feed this turn.",
+    "class": {
+      "Exploit": "LockFeed"
+    }
+  },
+  {
+    "id": "m07",
+    "name": "Stickied",
+    "cost": 2,
+    "description": "Cannot be moved by opponent effects.",
+    "class": {
+      "Meme": {
+        "base_virality": 4,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": ["Anchor"],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "m08",
+    "name": "Jannie",
+    "cost": 1,
+    "description": "If this falls off, gain 1 Mana next turn.",
+    "class": {
+      "Meme": {
+        "base_virality": 3,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnAbyss",
+            "effect": { "GainMana": 1 }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "m09",
+    "name": "Echo Chamber",
+    "cost": 4,
+    "description": "Gains +2 Virality every turn on Feed.",
+    "class": {
+      "Meme": {
+        "base_virality": 5,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnFeedTurnEnd",
+            "effect": { "BuffSelf": 2 }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "m10",
+    "name": "Whitelist",
+    "cost": 0,
+    "description": "Next meme costs 1 less.",
+    "class": {
+      "Exploit": "DiscountNext"
+    }
+  },
+  {
+    "id": "d01",
+    "name": "Rug Pull",
+    "cost": 6,
+    "description": "Destroy the bottom 3 cards of the Feed.",
+    "class": {
+      "Exploit": { "WipeBottom": 3 }
+    }
+  },
+  {
+    "id": "d02",
+    "name": "Ape In",
+    "cost": 3,
+    "description": "OnPost: Set Virality to random (1-15).",
+    "class": {
+      "Meme": {
+        "base_virality": 1,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPost",
+            "effect": { "RandomizeVirality": { "min": 1, "max": 15 } }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "d03",
+    "name": "Copy Pasta",
+    "cost": 2,
+    "description": "Fills empty Kitchen slots with 1/1 copies.",
+    "class": {
+      "Meme": {
+        "base_virality": 3,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPost",
+            "effect": {
+              "Spawn": {
+                "variant_id": "d06",
+                "count": 2,
+                "location": "Kitchen"
+              }
+            }
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "d04",
+    "name": "Vaporware",
+    "cost": 1,
+    "description": "Dies instantly if it takes damage.",
+    "class": {
+      "Meme": {
+        "base_virality": 10,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": ["Fragile"],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "d05",
+    "name": "Pump & Dump",
+    "cost": 2,
+    "description": "Gains +10 Virality for 1 turn, then dies.",
+    "class": {
+      "Meme": {
+        "base_virality": 2,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [
+          {
+            "trigger": "OnPost",
+            "effect": { "BuffSelf": 10 }
+          },
+          {
+            "trigger": "OnFeedTurnEnd",
+            "effect": "SelfDestructNext"
+          }
+        ],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "d06",
+    "name": "Shitpost",
+    "cost": 0,
+    "description": "No effect. Just cheap.",
+    "class": {
+      "Meme": {
+        "base_virality": 1,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": [],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  },
+  {
+    "id": "d07",
+    "name": "Bot Farm",
+    "cost": 3,
+    "description": "Add 3 \"Shitpost\" cards to your hand.",
+    "class": {
+      "Exploit": { "SpawnShitposts": 3 }
+    }
+  },
+  {
+    "id": "d08",
+    "name": "Gas Fees",
+    "cost": 2,
+    "description": "Opponent has -2 Mana next turn.",
+    "class": {
+      "Exploit": { "Tax": { "amount": 2 } }
+    }
+  },
+  {
+    "id": "d09",
+    "name": "Fork",
+    "cost": 4,
+    "description": "Randomize Feed order.",
+    "class": {
+      "Exploit": "ShuffleFeed"
+    }
+  },
+  {
+    "id": "d10",
+    "name": "Bag Holder",
+    "cost": 5,
+    "description": "Always enters Feed at the Bottom slot.",
+    "class": {
+      "Meme": {
+        "base_virality": 20,
+        "cook_rate": 1,
+        "yield_rate": 1,
+        "keywords": ["Heavy"],
+        "abilities": [],
+        "volatile": null,
+        "initial_freeze": null
+      }
+    }
+  }
+]

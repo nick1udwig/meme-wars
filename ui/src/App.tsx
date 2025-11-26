@@ -24,8 +24,10 @@ type UICardDefinition = {
   virality: number;
   kind: 'Meme' | 'Exploit';
   role: string;
+  description: string;
   ability?: string;
   yieldBonus?: string;
+  image?: string;
 };
 
 type LiveCard = {
@@ -37,10 +39,12 @@ type LiveCard = {
   currentVirality: number;
   kind: 'Meme' | 'Exploit';
   role: string;
+  description: string;
   ability?: string;
   yieldRate?: number;
   location: 'hand' | 'kitchen' | 'feed';
   owner: Seat;
+  image?: string;
 };
 
 type Deck = {
@@ -111,8 +115,10 @@ const mapBackendCard = (def: BackendCardDefinition): UICardDefinition => {
       virality: meme.base_virality,
       kind: 'Meme',
       role: keywords[0] ?? 'Meme',
+      description: def.description,
       ability: abilityText,
       yieldBonus: meme.yield_rate ? `+${meme.yield_rate} feed` : undefined,
+      image: def.image,
     };
   }
   const effect = (def.class as any).Exploit;
@@ -124,7 +130,9 @@ const mapBackendCard = (def: BackendCardDefinition): UICardDefinition => {
     virality: 0,
     kind: 'Exploit',
     role: role ?? 'Exploit',
+    description: def.description,
     ability: abilityLabel(effect),
+    image: def.image,
   };
 };
 
@@ -138,8 +146,9 @@ const locationToUi = (location: any): 'hand' | 'kitchen' | 'feed' => {
   return 'hand';
 };
 
-const mapInstanceToLiveCard = (instance: CardInstance): LiveCard => {
+const mapInstanceToLiveCard = (instance: CardInstance, catalog?: Map<string, BackendCardDefinition>): LiveCard => {
   const kind: 'Meme' | 'Exploit' = 'Meme' in (instance.class as any) ? 'Meme' : 'Exploit';
+  const def = catalog?.get(instance.variant_id);
   const card: LiveCard = {
     id: instance.instance_id,
     variantId: instance.variant_id,
@@ -149,10 +158,12 @@ const mapInstanceToLiveCard = (instance: CardInstance): LiveCard => {
     currentVirality: instance.current_virality,
     kind,
     role: kind,
+    description: def?.description ?? '',
     ability: undefined,
     yieldRate: instance.yield_rate,
     location: locationToUi(instance.location),
     owner: instance.owner as Seat,
+    image: def?.image,
   };
   if (kind === 'Meme') {
     const meme = (instance.class as any).Meme;
@@ -231,6 +242,7 @@ function App() {
   const nativeDragActive = useRef(false); // Track if native HTML5 drag is in progress
   const [heldCard, setHeldCard] = useState<string | null>(null);
   const [isPointerDragging, setIsPointerDragging] = useState(false);
+  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const feedZoneRef = useRef<HTMLDivElement | null>(null);
   const kitchenZoneRef = useRef<HTMLDivElement | null>(null);
   const isRevealingRef = useRef<boolean>(false);
@@ -301,17 +313,17 @@ function App() {
   }, [game, mySeat]);
 
   const feedCards: LiveCard[] = useMemo(
-    () => (game ? game.feed.map((card) => mapInstanceToLiveCard(card)) : []),
-    [game],
+    () => (game ? game.feed.map((card) => mapInstanceToLiveCard(card, catalogById)) : []),
+    [game, catalogById],
   );
   const playerKitchen = useMemo(() => {
-    const cards = myPlayer ? myPlayer.kitchen.map((card) => mapInstanceToLiveCard(card)) : [];
+    const cards = myPlayer ? myPlayer.kitchen.map((card) => mapInstanceToLiveCard(card, catalogById)) : [];
     console.log('playerKitchen cards:', cards.map(c => ({ name: c.name, owner: c.owner })));
     return cards;
-  }, [myPlayer]);
+  }, [myPlayer, catalogById]);
 
   const enemyKitchen = useMemo(() => {
-    const cards = opponentPlayer ? opponentPlayer.kitchen.map((card) => mapInstanceToLiveCard(card)) : [];
+    const cards = opponentPlayer ? opponentPlayer.kitchen.map((card) => mapInstanceToLiveCard(card, catalogById)) : [];
     console.log('🏠 enemyKitchen cards:', cards.map(c => ({
       name: c.name,
       id: c.id,
@@ -320,10 +332,10 @@ function App() {
       kind: c.kind
     })));
     return cards;
-  }, [opponentPlayer]);
+  }, [opponentPlayer, catalogById]);
   const playerHand = useMemo(
-    () => (myPlayer ? myPlayer.hand.map((card) => mapInstanceToLiveCard(card)) : []),
-    [myPlayer],
+    () => (myPlayer ? myPlayer.hand.map((card) => mapInstanceToLiveCard(card, catalogById)) : []),
+    [myPlayer, catalogById],
   );
   const draggingCard = useMemo(() => {
     if (!draggingId) return null;
@@ -1170,11 +1182,13 @@ function App() {
       setHoverTargetCard(null);
       setDraggingId(null);
       setIsPointerDragging(false);
+      setDragPosition(null);
       endHoldPreview();
     };
-    const handlePointerMove = () => {
+    const handlePointerMove = (evt: PointerEvent) => {
       clearHoldTimer();
       setIsPointerDragging(true);
+      setDragPosition({ x: evt.clientX, y: evt.clientY });
     };
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointermove', handlePointerMove);
@@ -1848,7 +1862,6 @@ function App() {
             }}
           >
                 <div className="card-top">
-                  <span className="pill quiet">{card.cost}</span>
                   <span className="pill quiet">{card.currentVirality}</span>
                 </div>
                 <p className="card-name">{card.name}</p>
@@ -1870,7 +1883,6 @@ function App() {
         {planned.map((card) => (
           <div key={`plan-${card.id}`} className={`kitchen-card surface pending ${planLocked ? 'locked' : ''}`}>
             <div className="card-top">
-              <span className="pill quiet">{card.cost}</span>
               <span className="pill quiet">{card.currentVirality}</span>
             </div>
             <p className="card-name">{card.name}</p>
@@ -2208,10 +2220,10 @@ function App() {
                 <p className="muted small">
                   {(modalCard as LiveCard).kind.toUpperCase()} • {(modalCard as LiveCard).role}
                 </p>
+                <p className="card-description">{(modalCard as LiveCard).description}</p>
                 <div className="stats-box">
                   <p>Base Virality: {(modalCard as LiveCard).baseVirality}</p>
                   <p>Current: {(modalCard as LiveCard).currentVirality}</p>
-                  {(modalCard as LiveCard).ability && <p className="ability">{(modalCard as LiveCard).ability}</p>}
                   {(modalCard as LiveCard).yieldRate !== undefined && (
                     <p className="muted small">Yield: +{(modalCard as LiveCard).yieldRate} / turn</p>
                   )}
@@ -2224,12 +2236,10 @@ function App() {
                 <p className="muted small">
                   {(modalCard as UICardDefinition).kind.toUpperCase()} • {(modalCard as UICardDefinition).role}
                 </p>
+                <p className="card-description">{(modalCard as UICardDefinition).description}</p>
                 <div className="stats-box">
                   <p>Virality: {(modalCard as UICardDefinition).virality}</p>
                   {(modalCard as UICardDefinition).yieldBonus && <p>{(modalCard as UICardDefinition).yieldBonus}</p>}
-                  {(modalCard as UICardDefinition).ability && (
-                    <p className="ability">{(modalCard as UICardDefinition).ability}</p>
-                  )}
                 </div>
               </>
             )}
@@ -2543,6 +2553,21 @@ function App() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+      {/* Floating drag preview for exploits */}
+      {isPointerDragging && draggingCard && draggingCard.kind === 'Exploit' && dragPosition && (
+        <div
+          className="floating-exploit-preview"
+          style={{
+            left: dragPosition.x,
+            top: dragPosition.y,
+          }}
+        >
+          <div className="exploit-preview-card">
+            <span className="exploit-preview-icon">⚡</span>
+            <span className="exploit-preview-name">{draggingCard.name}</span>
           </div>
         </div>
       )}

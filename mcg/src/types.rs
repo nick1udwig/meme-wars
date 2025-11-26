@@ -23,6 +23,9 @@ pub struct CardDefinition {
     pub id: String,
     pub name: String,
     pub cost: u8,
+    pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
     pub class: CardKind,
 }
 
