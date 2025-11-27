@@ -5,7 +5,7 @@ panic = "abort"
 
 [workspace]
 members = [
-    "mcg",
+    "meme-wars",
     "target/mcg-caller-util?",
 ]
 resolver = "2"

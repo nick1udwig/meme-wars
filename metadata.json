@@ -1,12 +1,12 @@
 {
-  "name": "Mcg",
-  "description": "A minimal skeleton app for the Hyperware platform using the Hyperapp framework - demonstrates basic state management and HTTP endpoints",
+  "name": "meme-wars",
+  "description": "Battle to control The Feed. Up the stakes? BASED",
   "image": "",
   "properties": {
-    "package_name": "mcg",
+    "package_name": "meme-wars",
     "current_version": "0.1.0",
-    "publisher": "template.os",
-    "mirrors": [],
+    "publisher": "nick.hypr",
+    "mirrors": ["nick.hypr", "nick1udwig.os"],
     "code_hashes": {
       "0.1.0": ""
     },

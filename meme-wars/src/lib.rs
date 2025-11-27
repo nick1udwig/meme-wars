@@ -31,7 +31,7 @@ use types::*;
 const ICON: &str = include_str!("./icon");
 
 #[derive(Default, Serialize, Deserialize)]
-pub struct AppState {
+pub struct MemeWarsState {
     catalog: Vec<CardDefinition>,
     game: Option<GameState>,
     next_instance: u64,
@@ -44,33 +44,28 @@ pub struct AppState {
 }
 
 fn process_id() -> ProcessId {
-    ProcessId::new(Some("mcg"), "mcg", "template.os")
+    ProcessId::new(Some("meme-wars"), "meme-wars", "nick.hypr")
 }
 
 // Hyperprocess entrypoint. Behavior is unchanged from the monolithic version; logic has been
 // reorganized into modules for clarity.
 #[hyperprocess(
-    name = "Mcg App",
+    name = "Meme Wars",
     ui = Some(hyperware_process_lib::http::server::HttpBindingConfig::default()),
     endpoints = vec![
         hyperware_process_lib::hyperapp::Binding::Http {
             path: "/api",
-            config: hyperware_process_lib::http::server::HttpBindingConfig::new(
-                false,
-                false,
-                false,
-                None
-            ),
+            config: hyperware_process_lib::http::server::HttpBindingConfig::default(),
         },
         hyperware_process_lib::hyperapp::Binding::Ws {
             path: WS_PATH,
-            config: hyperware_process_lib::http::server::WsBindingConfig::new(false, false, false),
+            config: hyperware_process_lib::http::server::WsBindingConfig::default(),
         },
     ],
     save_config = hyperware_process_lib::hyperapp::SaveOptions::OnDiff,
-    wit_world = "mcg-template-dot-os-v0"
+    wit_world = "meme-wars-nick-dot-hypr-v0"
 )]
-impl AppState {
+impl MemeWarsState {
     #[init]
     async fn initialize(&mut self) {
         add_to_homepage(GAME_NAME, Some(ICON), Some("/"), None);
@@ -539,7 +534,7 @@ impl AppState {
     }
 }
 
-impl AppState {
+impl MemeWarsState {
     fn compose_snapshot(&self) -> GameSnapshot {
         let mut lobbies = self.lobbies.clone();
         for lob in &self.discovered_lobbies {
@@ -768,7 +763,7 @@ impl AppState {
 }
 
 async fn commit_turn_with_plan(
-    app: &mut AppState,
+    app: &mut MemeWarsState,
     seat: Seat,
     plan: TurnPlan,
     salt: String,
@@ -784,8 +779,8 @@ mod tests {
     use catalog::find_definition;
     use game::split_players_mut;
 
-    fn make_app() -> AppState {
-        let mut app = AppState::default();
+    fn make_app() -> MemeWarsState {
+        let mut app = MemeWarsState::default();
         app.catalog = build_catalog();
         app.next_instance = 1;
         app

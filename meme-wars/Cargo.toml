@@ -33,7 +33,7 @@ crate-type = ["cdylib"]
 
 [package]
 edition = "2021"
-name = "mcg"
+name = "meme-wars"
 version = "0.1.0"
 
 [package.metadata.component]

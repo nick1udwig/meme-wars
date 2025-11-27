@@ -2110,24 +2110,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcg"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "hyperprocess_macro",
- "hyperware_process_lib",
- "mcg_caller_utils",
- "process_macros",
- "rand 0.8.5",
- "rand_pcg",
- "rmp-serde",
- "serde",
- "serde_json",
- "sha2",
- "wit-bindgen 0.42.1",
-]
-
-[[package]]
 name = "mcg_caller_utils"
 version = "0.1.0"
 dependencies = [
@@ -2148,6 +2130,24 @@ name = "memchr"
 version = "2.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
+
+[[package]]
+name = "meme-wars"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hyperprocess_macro",
+ "hyperware_process_lib",
+ "mcg_caller_utils",
+ "process_macros",
+ "rand 0.8.5",
+ "rand_pcg",
+ "rmp-serde",
+ "serde",
+ "serde_json",
+ "sha2",
+ "wit-bindgen 0.42.1",
+]
 
 [[package]]
 name = "mime"
