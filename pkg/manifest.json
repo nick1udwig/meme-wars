@@ -1,7 +1,7 @@
 [
   {
-    "process_name": "mcg",
-    "process_wasm_path": "/mcg.wasm",
+    "process_name": "meme-wars",
+    "process_wasm_path": "/meme-wars.wasm",
     "on_exit": "Restart",
     "request_networking": true,
     "request_capabilities": [
