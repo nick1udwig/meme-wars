@@ -1,7 +1,7 @@
 {
   "name": "meme-wars",
   "description": "Battle to control The Feed. Up the stakes? BASED",
-  "image": "",
+  "image": "https://raw.githubusercontent.com/nick1udwig/meme-wars/refs/heads/master/assets/pepe.jpg",
   "properties": {
     "package_name": "meme-wars",
     "current_version": "0.1.0",
