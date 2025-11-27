@@ -199,7 +199,6 @@ function App() {
     leaveGame,
     commitTurn,
     revealTurn,
-    callBased,
     acceptBased,
     foldBased,
   } = useMcgStore();
@@ -228,7 +227,7 @@ function App() {
   const [basedPulseKey, setBasedPulseKey] = useState<number | null>(null);
   const [basedModalPulse, setBasedModalPulse] = useState<number | null>(null);
   const [basedTurnCalled, setBasedTurnCalled] = useState<number | null>(null);
-  const [basedModalSeenTurn, setBasedModalSeenTurn] = useState<number | null>(null);
+  const [showBasedResponseModal, setShowBasedResponseModal] = useState(false);
   const [isEndingTurn, setIsEndingTurn] = useState(false);
   const [hoverZone, setHoverZone] = useState<'feed' | 'kitchen' | null>(null);
   const [hoverTargetCard, setHoverTargetCard] = useState<LiveCard | null>(null); // Track target card for pointer exploit drops
@@ -311,6 +310,7 @@ function App() {
     console.log('opponentPlayer:', { mySeat, player: player?.seat, nodeId: player?.node_id });
     return player;
   }, [game, mySeat]);
+  const myNodeId = useMemo(() => nodeId ?? myPlayer?.node_id ?? null, [nodeId, myPlayer]);
 
   const feedCards: LiveCard[] = useMemo(
     () => (game ? game.feed.map((card) => mapInstanceToLiveCard(card, catalogById)) : []),
@@ -382,6 +382,17 @@ function App() {
   const opponentWaitingOnMe = opponentHasCommitted && !myHasCommitted;
   const isResolving = myHasCommitted && opponentHasCommitted && !myCommit?.revealed;
   const planLocked = !!pendingReveal || myHasCommitted;
+  const planHasActions =
+    draftPlan.plays_to_kitchen.length + draftPlan.posts.length + draftPlan.exploits.length > 0;
+  const basedCalledThisTurn = game && basedTurnCalled !== null ? basedTurnCalled === game.turn : false;
+  const basedButtonDisabled =
+    planLocked ||
+    waitingForOpponent ||
+    isResolving ||
+    isEndingTurn ||
+    !planHasActions ||
+    basedCalledThisTurn ||
+    !!game?.pending_stakes;
 
   const costWithDiscount = (card: LiveCard) => {
     const discount = myPlayer?.cost_discount ?? 0;
@@ -407,9 +418,13 @@ function App() {
   }, [activePlan, myPlayer, playerHand, playerKitchen]);
   const availableMana = Math.max(0, (myPlayer?.mana ?? 0) - plannedManaSpent);
   const opponentCalledBased =
-    !!game && !!nodeId && !!game.pending_stakes && game.pending_stakes !== nodeId;
+    !!game && !!game.pending_stakes && game.pending_stakes !== myNodeId;
+  // Show modal when:
+  // 1. Phase is StakePending and opponent called BASED (immediate response needed)
+  // 2. User clicked End Turn while opponent has pending BASED
   const showBasedModal =
-    opponentCalledBased && game && (basedModalSeenTurn === null || basedModalSeenTurn < game.turn);
+    (opponentCalledBased && game?.phase === 'StakePending') ||
+    (showBasedResponseModal && opponentCalledBased && !!game);
 
   const getExploitEffect = (card: LiveCard) => {
     if (card.kind !== 'Exploit') {
@@ -642,10 +657,9 @@ function App() {
     if (basedTurnCalled !== null && game.turn > basedTurnCalled) {
       setBasedTurnCalled(null);
     }
-    if (basedModalSeenTurn !== null && game.turn > basedModalSeenTurn) {
-      setBasedModalSeenTurn(null);
-    }
-  }, [game?.turn, game, basedTurnCalled, basedModalSeenTurn]);
+    // Reset BASED response modal on turn change
+    setShowBasedResponseModal(false);
+  }, [game?.turn, game, basedTurnCalled]);
 
   // Also reset the ending turn flag when the commit is successful
   useEffect(() => {
@@ -661,8 +675,15 @@ function App() {
   }, [myHasCommitted]);
 
   useEffect(() => {
+    if (!game) return;
+    // If the player cleared their plan before ending the turn, drop the BASED intent.
+    if (!planHasActions && !planLocked && basedTurnCalled === game.turn) {
+      setBasedTurnCalled(null);
+    }
+  }, [planHasActions, planLocked, basedTurnCalled, game]);
+
+  useEffect(() => {
     if (!showBasedModal || !game) return;
-    setBasedModalSeenTurn(game.turn);
     const key = Date.now();
     setBasedModalPulse(key);
     const timer = window.setTimeout(() => {
@@ -1336,20 +1357,29 @@ function App() {
       return;
     }
 
+    // If opponent called BASED, show modal instead of ending turn
+    if (opponentCalledBased) {
+      console.log('⚡ Opponent called BASED - showing response modal');
+      setShowBasedResponseModal(true);
+      return;
+    }
+
     // Set the flag immediately to prevent double-clicks
     console.log('🔒 Setting isEndingTurn to true');
     setIsEndingTurn(true);
 
     try {
       const salt = crypto.randomUUID();
-      const plan = { ...draftPlan };
+      // Include BASED flag in the plan - it will be processed after both players reveal
+      const plan = { ...draftPlan, based: basedTurnCalled === game.turn && planHasActions };
       console.log('📤 Committing turn', {
         turn: game.turn,
         planActions: {
           kitchen: plan.plays_to_kitchen.length,
           posts: plan.posts.length,
           exploits: plan.exploits.length
-        }
+        },
+        based: plan.based
       });
       setPendingReveal({ plan, salt, turn: game.turn });
       await commitTurn(mySeat, plan, salt, game.turn);
@@ -1371,12 +1401,11 @@ function App() {
     }, 900);
   };
 
-  const handleCallBased = async () => {
+  const handleCallBased = () => {
     if (!game || !mySeat) return;
     if (basedButtonDisabled) return;
     setBasedTurnCalled(game.turn);
     triggerRipple(setBasedPulseKey);
-    await callBased(mySeat);
   };
 
   const renderLobby = () => (
@@ -1908,14 +1937,9 @@ function App() {
 
   const playerScore = myPlayer?.score ?? 0;
   const opponentScore = opponentPlayer?.score ?? 0;
-  const scoreTarget = Math.max(playerScore, opponentScore, 100);
+  const scoreTarget = Math.max(playerScore, opponentScore, 30);
   const playerPct = scoreTarget === 0 ? 0 : Math.min(100, Math.round((playerScore / scoreTarget) * 100));
   const opponentPct = scoreTarget === 0 ? 0 : Math.min(100, Math.round((opponentScore / scoreTarget) * 100));
-  const planHasActions =
-    draftPlan.plays_to_kitchen.length + draftPlan.posts.length + draftPlan.exploits.length > 0;
-  const basedCalledThisTurn = game && basedTurnCalled !== null ? basedTurnCalled === game.turn : false;
-  const basedButtonDisabled =
-    planLocked || waitingForOpponent || isResolving || !planHasActions || basedCalledThisTurn || !!game?.pending_stakes;
   const endTurnLabel = waitingForOpponent ? 'Waiting for opponent…' : isResolving ? 'Resolving…' : isEndingTurn ? 'Processing…' : 'End Turn';
   const endTurnDisabled = waitingForOpponent || isResolving || planLocked || isEndingTurn;
 
@@ -2434,6 +2458,7 @@ function App() {
               className="save-btn"
               onClick={async () => {
                 triggerRipple(setBasedPulseKey);
+                setShowBasedResponseModal(false);
                 await acceptBased(mySeat ?? 'Host');
               }}
             >
@@ -2443,6 +2468,7 @@ function App() {
               className="ghost-btn compact danger"
               onClick={async () => {
                 triggerRipple(setBasedPulseKey);
+                setShowBasedResponseModal(false);
                 await foldBased(mySeat ?? 'Host');
               }}
             >

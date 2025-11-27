@@ -211,6 +211,8 @@ pub struct TurnPlan {
     pub plays_to_kitchen: Vec<String>,
     pub posts: Vec<PostAction>,
     pub exploits: Vec<ExploitAction>,
+    #[serde(default)]
+    pub based: bool,
 }
 
 impl Default for TurnPlan {
@@ -219,6 +221,7 @@ impl Default for TurnPlan {
             plays_to_kitchen: vec![],
             posts: vec![],
             exploits: vec![],
+            based: false,
         }
     }
 }

@@ -78,6 +78,7 @@ export interface TurnPlan {
   plays_to_kitchen: string[];
   posts: PostAction[];
   exploits: ExploitAction[];
+  based?: boolean;
 }
 
 export interface PostAction {

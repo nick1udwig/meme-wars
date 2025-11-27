@@ -167,9 +167,16 @@ impl GameState {
 
     pub fn resolve_if_ready(&mut self) -> Result<(), String> {
         if self.ready_to_resolve() {
-            self.phase = Phase::Resolving;
             let host_plan = self.plan_for(Seat::Host).unwrap_or_default();
             let opp_plan = self.plan_for(Seat::Opponent).unwrap_or_default();
+            // Process BASED calls before resolution
+            self.process_based_calls(host_plan.based, opp_plan.based);
+            // If one player called BASED, wait for response before resolving
+            if self.pending_stakes.is_some() {
+                self.phase = Phase::StakePending;
+                return Ok(());
+            }
+            self.phase = Phase::Resolving;
             self.resolve_turn(host_plan, opp_plan)?;
         } else {
             self.phase = Phase::Reveal;
@@ -202,7 +209,13 @@ impl GameState {
         }
         self.stakes = self.stakes.saturating_mul(2).max(1);
         self.pending_stakes = None;
-        if self.phase != Phase::GameOver {
+        // After accepting BASED, resolve the turn if both have revealed
+        if self.ready_to_resolve() {
+            let host_plan = self.plan_for(Seat::Host).unwrap_or_default();
+            let opp_plan = self.plan_for(Seat::Opponent).unwrap_or_default();
+            self.phase = Phase::Resolving;
+            self.resolve_turn(host_plan, opp_plan)?;
+        } else if self.phase != Phase::GameOver {
             self.phase = Phase::Commit;
         }
         Ok(())
@@ -216,6 +229,30 @@ impl GameState {
         self.phase = Phase::GameOver;
         self.winner = Some(seat.other());
         Ok(())
+    }
+
+    /// Process BASED calls from both players after reveals.
+    /// If both called: double stakes. If one called: set pending_stakes.
+    fn process_based_calls(&mut self, host_based: bool, opp_based: bool) {
+        match (host_based, opp_based) {
+            (true, true) => {
+                // Both called - double stakes
+                self.stakes = self.stakes.saturating_mul(2).max(1);
+            }
+            (true, false) => {
+                // Host called, opponent must respond next turn
+                if let Some(node) = self.player_node(&Seat::Host) {
+                    self.pending_stakes = Some(node);
+                }
+            }
+            (false, true) => {
+                // Opponent called, host must respond next turn
+                if let Some(node) = self.player_node(&Seat::Opponent) {
+                    self.pending_stakes = Some(node);
+                }
+            }
+            (false, false) => {}
+        }
     }
 
     pub fn resolve_turn(&mut self, host_plan: TurnPlan, opponent_plan: TurnPlan) -> Result<(), String> {
