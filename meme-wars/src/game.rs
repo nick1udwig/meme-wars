@@ -902,8 +902,7 @@ impl GameState {
         for (index, card) in self.feed.iter().enumerate() {
             let (owner, _) = split_players_mut(&mut self.players, &card.owner);
             let points = (BASE_FEED_YIELD + (index as i32 * FEED_YIELD_STEP))
-                * card.yield_rate
-                * self.stakes as i32;
+                * card.yield_rate;
             owner.score += points;
         }
     }

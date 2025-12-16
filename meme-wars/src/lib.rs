@@ -545,6 +545,15 @@ impl MemeWarsState {
                 lobbies.push(lob.clone());
             }
         }
+        // Filter out lobbies where the game is over
+        let game_over = self
+            .game
+            .as_ref()
+            .map(|g| g.phase == Phase::GameOver)
+            .unwrap_or(false);
+        if game_over {
+            lobbies.retain(|l| !l.started);
+        }
         GameSnapshot {
             catalog: self.catalog.clone(),
             game: self.game.clone(),

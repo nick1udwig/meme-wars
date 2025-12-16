@@ -247,6 +247,8 @@ function App() {
   const isRevealingRef = useRef<boolean>(false);
   const [opponentExploits, setOpponentExploits] = useState<Array<{ card_id: string; target: any }>>([]);
   const opponentExploitTimer = useRef<number | null>(null);
+  const pendingExploitNotification = useRef<Array<{ card_id: string; target: any }> | null>(null);
+  const lastExploitTurn = useRef<number | null>(null);
 
   const activePlan = useMemo(() => pendingReveal?.plan ?? draftPlan, [pendingReveal, draftPlan]);
   const queuedToKitchen = useMemo(() => new Set(activePlan.plays_to_kitchen), [activePlan]);
@@ -573,8 +575,20 @@ function App() {
     // Check if opponent has revealed exploits
     const opponentCommit = opponentPlayer.commit;
     if (opponentCommit?.revealed && opponentCommit.revealed.exploits.length > 0) {
-      // Show opponent exploits for 5 seconds
-      setOpponentExploits(opponentCommit.revealed.exploits);
+      // Only show if we haven't shown for this turn yet
+      if (lastExploitTurn.current === game.turn) return;
+      lastExploitTurn.current = game.turn;
+
+      const exploits = opponentCommit.revealed.exploits;
+
+      // If BASED modal is showing, store for later
+      if (showBasedModal) {
+        pendingExploitNotification.current = exploits;
+        return;
+      }
+
+      // Show opponent exploits
+      setOpponentExploits(exploits);
 
       // Clear previous timer
       if (opponentExploitTimer.current) {
@@ -593,7 +607,26 @@ function App() {
         clearTimeout(opponentExploitTimer.current);
       }
     };
-  }, [game?.turn, opponentPlayer?.commit?.revealed]);
+  }, [game?.turn, opponentPlayer?.commit?.revealed?.exploits?.length ?? 0, showBasedModal]);
+
+  // Show pending exploits when BASED modal closes
+  useEffect(() => {
+    if (!showBasedModal && pendingExploitNotification.current) {
+      const exploits = pendingExploitNotification.current;
+      pendingExploitNotification.current = null;
+
+      setOpponentExploits(exploits);
+
+      if (opponentExploitTimer.current) {
+        clearTimeout(opponentExploitTimer.current);
+      }
+
+      opponentExploitTimer.current = window.setTimeout(() => {
+        setOpponentExploits([]);
+        opponentExploitTimer.current = null;
+      }, 5000);
+    }
+  }, [showBasedModal]);
 
   useEffect(() => {
     if (!pendingReveal || !game || !mySeat) return;
@@ -693,13 +726,18 @@ function App() {
   }, [showBasedModal, game]);
 
   const filteredLobbies = useMemo(() => {
-    if (!lobbyQuery.trim()) return lobbies;
-    return lobbies.filter(
+    let filtered = lobbies;
+    // Filter out started lobbies if game is over
+    if (game?.phase === 'GameOver') {
+      filtered = filtered.filter((l) => !l.started);
+    }
+    if (!lobbyQuery.trim()) return filtered;
+    return filtered.filter(
       (lobby) =>
         lobby.host.toLowerCase().includes(lobbyQuery.toLowerCase()) ||
         lobby.description.toLowerCase().includes(lobbyQuery.toLowerCase()),
     );
-  }, [lobbies, lobbyQuery]);
+  }, [lobbies, lobbyQuery, game?.phase]);
 
   const selectedDeck = decks.find((d) => d.id === selectedDeckId) ?? decks[0];
   const MAX_DECK_SIZE = 12;
@@ -2576,26 +2614,56 @@ function App() {
       {basedPulseKey && <div key={basedPulseKey} className="based-ripple" />}
       {basedModalPulse && <div key={`modal-${basedModalPulse}`} className="based-ripple modal-ripple" />}
       {opponentExploits.length > 0 && (
-        <div className="opponent-exploit-notification">
+        <div
+          className="opponent-exploit-notification"
+          onClick={() => {
+            setOpponentExploits([]);
+            if (opponentExploitTimer.current) {
+              clearTimeout(opponentExploitTimer.current);
+              opponentExploitTimer.current = null;
+            }
+          }}
+        >
           <div className="notification-header">Opponent played exploits!</div>
           <div className="exploit-list">
             {opponentExploits.map((exploit, idx) => {
-              const targetDesc = exploit.target
-                ? typeof exploit.target === 'object' && 'Card' in exploit.target
-                  ? 'targeting card'
-                  : typeof exploit.target === 'object' && 'FeedSlot' in exploit.target
-                  ? `targeting slot #${exploit.target.FeedSlot + 1}`
-                  : 'on zone'
-                : '';
+              // Look up card name from catalog using variant_id (card_id is instance_id like "e01-5")
+              const variantId = exploit.card_id.split('-')[0];
+              const cardDef = catalog.find((c) => c.id === variantId);
+              const cardName = cardDef?.name || exploit.card_id;
+
+              // Look up target card name if targeting a card
+              let targetDesc = '';
+              if (exploit.target) {
+                if (typeof exploit.target === 'object' && 'Card' in exploit.target) {
+                  const targetInstanceId = exploit.target.Card;
+                  // Find target in all zones
+                  const allCards = [
+                    ...(myPlayer?.kitchen || []),
+                    ...(myPlayer?.hand || []),
+                    ...(opponentPlayer?.kitchen || []),
+                    ...(opponentPlayer?.hand || []),
+                    ...(game?.feed || []),
+                  ];
+                  const targetCard = allCards.find((c) => c.instance_id === targetInstanceId);
+                  const targetName = targetCard?.name || 'card';
+                  targetDesc = `→ ${targetName}`;
+                } else if (typeof exploit.target === 'object' && 'FeedSlot' in exploit.target) {
+                  targetDesc = `→ Feed #${exploit.target.FeedSlot + 1}`;
+                } else if (exploit.target === 'EnemyKitchen') {
+                  targetDesc = '→ Kitchen';
+                }
+              }
 
               return (
                 <div key={idx} className="exploit-notification-item">
                   <span className="exploit-icon">⚡</span>
-                  <span>{exploit.card_id || 'Exploit'} {targetDesc}</span>
+                  <span>{cardName} {targetDesc}</span>
                 </div>
               );
             })}
           </div>
+          <div className="notification-hint">tap to dismiss</div>
         </div>
       )}
       {/* Floating drag preview for exploits */}
