@@ -401,7 +401,7 @@ function App() {
   const [decks, setDecks] = useState<Deck[]>([{ id: 'deck-1', name: 'New Deck', cards: [] }]);
   const [selectedDeckId, setSelectedDeckId] = useState<string>('deck-1');
   const [deckMessage, setDeckMessage] = useState<string | null>(null);
-  const [modalCard, setModalCard] = useState<UICardDefinition | LiveCard | null>(null);
+  const [modalCard, setModalCard] = useState<{ card: UICardDefinition | LiveCard; rect: DOMRect } | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showHostModal, setShowHostModal] = useState(false);
   const [hostForm, setHostForm] = useState({ mode: 'Standard', stakes: 1, description: 'Public lobby' });
@@ -1049,7 +1049,10 @@ function App() {
     setActiveScreen('duel');
   };
 
-  const handleInspectCard = (card: UICardDefinition | LiveCard) => setModalCard(card);
+  const handleInspectCard = (card: UICardDefinition | LiveCard, e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setModalCard({ card, rect });
+  };
 
   const handleLeaveGame = async () => {
     await leaveGame();
@@ -1808,7 +1811,7 @@ function App() {
             const card = catalog.find((c) => c.id === cardId);
             if (!card) return null;
             return (
-              <div key={`${card.id}-${idx}`} className="deck-row compact-row" onClick={() => handleInspectCard(card)}>
+              <div key={`${card.id}-${idx}`} className="deck-row compact-row" onClick={(e) => handleInspectCard(card, e)}>
                 <span className="card-name">{card.name}</span>
                 <button className="ghost-btn compact" onClick={() => handleRemoveFromDeck(idx)}>
                   Remove
@@ -1828,7 +1831,7 @@ function App() {
                 draggable
                 onDragStart={onDragStart(card.id, 'hand')}
                 onDragEnd={onDragEnd}
-                onClick={() => handleInspectCard(card)}
+                onClick={(e) => handleInspectCard(card, e)}
               >
                 <span className="cost-badge">{card.cost}</span>
                 <div className="card-body">
@@ -1964,9 +1967,9 @@ function App() {
               }
             }}
             onPointerLeave={endHoldPreview}
-            onClick={() => {
+            onClick={(e) => {
               if (isPointerDragging) return;
-              handleInspectCard(card);
+              handleInspectCard(card, e);
             }}
           >
             <div className="hand-card-top">
@@ -2156,9 +2159,9 @@ function App() {
                     endHoldPreview();
                   }
                 }}
-                onClick={() => {
+                onClick={(e) => {
                   if (isPointerDragging) return;
-                  handleInspectCard(card);
+                  handleInspectCard(card, e);
                 }}
               >
                 <div className="card-top">
@@ -2343,7 +2346,7 @@ function App() {
                     className={`feed-pill surface ${card.owner === mySeat ? 'mine' : 'enemy'} ${
                       isTargetedByExploit ? 'exploit-target' : ''
                     } ${isDragTarget ? 'valid-target' : ''}`}
-                    onClick={() => handleInspectCard(card)}
+                    onClick={(e) => handleInspectCard(card, e)}
                     onContextMenu={(e) => e.preventDefault()}
                     onPointerEnter={() => {
                       // When dragging an exploit over a feed card, track it as the target
@@ -2507,50 +2510,65 @@ function App() {
     </div>
   );
 
-  const renderModalCard = () =>
-    modalCard && (
+  const renderModalCard = () => {
+    if (!modalCard) return null;
+    const { card, rect } = modalCard;
+    const modalWidth = 320;
+    const startX = rect.left + rect.width / 2 - window.innerWidth / 2;
+    const startY = rect.top + rect.height / 2 - window.innerHeight / 2;
+    const startScale = rect.width / modalWidth;
+
+    return (
       <div className="modal-overlay modal-entering" onClick={closeAllModals}>
-        <div className="modal-card surface modal-quick" onClick={(e) => e.stopPropagation()}>
-          <p className="muted small center">Tap anywhere to close</p>
+        <div
+          className="modal-expand"
+          style={{
+            '--start-x': `${startX}px`,
+            '--start-y': `${startY}px`,
+            '--start-scale': startScale,
+          } as React.CSSProperties}
+          onClick={(e) => e.stopPropagation()}
+        >
           <HoloCard
-            kind={modalCard.kind}
-            cost={modalCard.cost}
+            kind={card.kind}
+            cost={card.cost}
             className="big-card"
           >
-            {'variantId' in modalCard ? (
-              <>
-                <span className="cost-badge">{(modalCard as LiveCard).cost}</span>
-                <h3>{modalCard.name}</h3>
-                <p className="muted small">
-                  {(modalCard as LiveCard).kind.toUpperCase()} • {(modalCard as LiveCard).role}
-                </p>
-                <p className="card-description">{(modalCard as LiveCard).description}</p>
-                <div className="stats-box">
-                  <p>Base Virality: {(modalCard as LiveCard).baseVirality}</p>
-                  <p>Current: {(modalCard as LiveCard).currentVirality}</p>
-                  {(modalCard as LiveCard).yieldRate !== undefined && (
-                    <p className="muted small">Yield: +{(modalCard as LiveCard).yieldRate} / turn</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <span className="cost-badge">{(modalCard as UICardDefinition).cost}</span>
-                <h3>{modalCard.name}</h3>
-                <p className="muted small">
-                  {(modalCard as UICardDefinition).kind.toUpperCase()} • {(modalCard as UICardDefinition).role}
-                </p>
-                <p className="card-description">{(modalCard as UICardDefinition).description}</p>
-                <div className="stats-box">
-                  <p>Virality: {(modalCard as UICardDefinition).virality}</p>
-                  {(modalCard as UICardDefinition).yieldBonus && <p>{(modalCard as UICardDefinition).yieldBonus}</p>}
-                </div>
-              </>
-            )}
+          {'variantId' in card ? (
+            <>
+              <span className="cost-badge">{(card as LiveCard).cost}</span>
+              <h3>{card.name}</h3>
+              <p className="muted small">
+                {(card as LiveCard).kind.toUpperCase()} • {(card as LiveCard).role}
+              </p>
+              <p className="card-description">{(card as LiveCard).description}</p>
+              <div className="stats-box">
+                <p>Base Virality: {(card as LiveCard).baseVirality}</p>
+                <p>Current: {(card as LiveCard).currentVirality}</p>
+                {(card as LiveCard).yieldRate !== undefined && (
+                  <p className="muted small">Yield: +{(card as LiveCard).yieldRate} / turn</p>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="cost-badge">{(card as UICardDefinition).cost}</span>
+              <h3>{card.name}</h3>
+              <p className="muted small">
+                {(card as UICardDefinition).kind.toUpperCase()} • {(card as UICardDefinition).role}
+              </p>
+              <p className="card-description">{(card as UICardDefinition).description}</p>
+              <div className="stats-box">
+                <p>Virality: {(card as UICardDefinition).virality}</p>
+                {(card as UICardDefinition).yieldBonus && <p>{(card as UICardDefinition).yieldBonus}</p>}
+              </div>
+            </>
+          )}
           </HoloCard>
         </div>
       </div>
     );
+  };
 
   const renderSearchModal = () => {
     if (searchContext === 'none') return null;

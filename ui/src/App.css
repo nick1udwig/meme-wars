@@ -1496,6 +1496,22 @@
              loseShake 0.6s ease-in-out 400ms;
 }
 
+/* Card expand from source position to center */
+@keyframes cardExpand {
+  from {
+    transform: translate(var(--start-x), var(--start-y)) scale(var(--start-scale));
+    opacity: 0.7;
+  }
+  to {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+.modal-expand {
+  animation: cardExpand 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* ─── CARD MOVEMENT ANIMATIONS ──────────────────────────────────────────────── */
 
 /* Hand → Kitchen (meme play) */
