@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import type { DragEvent } from 'react';
 import './index.css';
 import './App.css';
@@ -178,6 +178,197 @@ const mapInstanceToLiveCard = (instance: CardInstance, catalog?: Map<string, Bac
     card.ability = abilityLabel(effect);
   }
   return card;
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HOLOGRAPHIC CARD COMPONENT
+// Adapted from pokemon-cards-css for 3D tilt + holographic shine effects
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type HoloCardProps = {
+  children: React.ReactNode;
+  kind: 'Meme' | 'Exploit';
+  cost: number;
+  className?: string;
+  style?: CSSProperties;
+  disabled?: boolean;
+  // Pass through event handlers
+  onClick?: (e: React.MouseEvent) => void;
+  onPointerDown?: (e: ReactPointerEvent) => void;
+  onPointerMove?: (e: ReactPointerEvent) => void;
+  onPointerEnter?: (e: ReactPointerEvent) => void;
+  onPointerLeave?: (e: ReactPointerEvent) => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onDragStart?: (e: DragEvent) => void;
+  onDragEnd?: (e: DragEvent) => void;
+  onDragOver?: (e: DragEvent) => void;
+  onDrop?: (e: DragEvent) => void;
+  draggable?: boolean;
+};
+
+const HoloCard = ({
+  children,
+  kind,
+  cost,
+  className = '',
+  style = {},
+  disabled = false,
+  onClick,
+  onPointerDown,
+  onPointerMove,
+  onPointerEnter,
+  onPointerLeave,
+  onContextMenu,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+  draggable,
+}: HoloCardProps) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [tiltStyle, setTiltStyle] = useState<CSSProperties>({});
+  const isInteracting = useRef(false);
+  const rafId = useRef<number | null>(null);
+
+  // Determine rarity tier based on cost
+  const rarityClass = cost >= 5 ? 'epic' : cost >= 3 ? 'rare' : 'standard';
+  const kindClass = kind.toLowerCase();
+
+  const handlePointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (disabled || !cardRef.current) return;
+
+    // Cancel any pending animation frame
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+
+    rafId.current = requestAnimationFrame(() => {
+      if (!cardRef.current) return;
+
+      const rect = cardRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Calculate position as percentage (0-100)
+      const percentX = (x / rect.width) * 100;
+      const percentY = (y / rect.height) * 100;
+
+      // Calculate rotation (max ±12 degrees)
+      const rotateY = ((percentX - 50) / 50) * 12;
+      const rotateX = ((50 - percentY) / 50) * 12;
+
+      setTiltStyle({
+        '--holo-rotate-x': `${rotateX}deg`,
+        '--holo-rotate-y': `${rotateY}deg`,
+        '--holo-pointer-x': `${percentX}%`,
+        '--holo-pointer-y': `${percentY}%`,
+        '--holo-shine-opacity': '1',
+        '--holo-scale': '1.02',
+      } as CSSProperties);
+
+      isInteracting.current = true;
+    });
+
+    // Forward the event
+    onPointerMove?.(e);
+  }, [disabled, onPointerMove]);
+
+  const handlePointerEnter = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!disabled) {
+      setTiltStyle(prev => ({
+        ...prev,
+        '--holo-shine-opacity': '1',
+      } as CSSProperties));
+    }
+    onPointerEnter?.(e);
+  }, [disabled, onPointerEnter]);
+
+  const handlePointerLeave = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    // Reset tilt on leave
+    if (rafId.current) cancelAnimationFrame(rafId.current);
+
+    setTiltStyle({
+      '--holo-rotate-x': '0deg',
+      '--holo-rotate-y': '0deg',
+      '--holo-pointer-x': '50%',
+      '--holo-pointer-y': '50%',
+      '--holo-shine-opacity': '0',
+      '--holo-scale': '1',
+    } as CSSProperties);
+
+    isInteracting.current = false;
+    onPointerLeave?.(e);
+  }, [onPointerLeave]);
+
+  // Clean up animation frame on unmount
+  useEffect(() => {
+    return () => {
+      if (rafId.current) cancelAnimationFrame(rafId.current);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={cardRef}
+      className={`holo-card ${kindClass} ${rarityClass} ${className}`}
+      style={{ ...tiltStyle, ...style }}
+      onClick={onClick}
+      onPointerDown={onPointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      onContextMenu={onContextMenu}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      draggable={draggable}
+    >
+      {children}
+    </div>
+  );
+};
+
+// Simpler holo pill for feed cards (no tilt, just shimmer)
+type HoloPillProps = {
+  children: React.ReactNode;
+  kind: 'Meme' | 'Exploit';
+  className?: string;
+  style?: CSSProperties;
+  onClick?: (e: React.MouseEvent) => void;
+  onPointerEnter?: (e: ReactPointerEvent) => void;
+  onPointerLeave?: (e: ReactPointerEvent) => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
+  onDragOver?: (e: DragEvent) => void;
+  onDrop?: (e: DragEvent) => void;
+};
+
+const HoloPill = ({
+  children,
+  kind,
+  className = '',
+  style = {},
+  onClick,
+  onPointerEnter,
+  onPointerLeave,
+  onContextMenu,
+  onDragOver,
+  onDrop,
+}: HoloPillProps) => {
+  const kindClass = kind.toLowerCase();
+
+  return (
+    <div
+      className={`holo-pill ${kindClass} ${className}`}
+      style={style}
+      onClick={onClick}
+      onPointerEnter={onPointerEnter}
+      onPointerLeave={onPointerLeave}
+      onContextMenu={onContextMenu}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      {children}
+    </div>
+  );
 };
 
 function App() {
@@ -1700,11 +1891,14 @@ function App() {
     <div className="hand-strip up hand-always">
       <div className="hand-expanded">
         {playerHand.map((card) => (
-          <div
+          <HoloCard
             key={`full-${card.id}`}
+            kind={card.kind}
+            cost={card.cost}
             className={`hand-card surface ${queuedToKitchen.has(card.id) || queuedExploits.has(card.id) ? 'queued' : ''} ${
               draggingId === card.id ? 'dragging' : ''
             } ${noPlayCardId === card.id ? 'no-play' : ''}`}
+            disabled={planLocked}
             draggable
             onDragStart={(e) => {
               if (planLocked) {
@@ -1745,7 +1939,7 @@ function App() {
               <span className="pill quiet">{card.currentVirality}</span>
             </div>
             <p className="card-name ellipsis">{card.name}</p>
-          </div>
+          </HoloCard>
         ))}
         {playerHand.length === 0 && <p className="muted small">Empty hand</p>}
       </div>
@@ -1802,13 +1996,16 @@ function App() {
             }
 
             return (
-              <div
+              <HoloCard
                 key={card.id}
+                kind={card.kind}
+                cost={card.cost}
                 className={`kitchen-card surface ${queuedPosts.has(card.id) ? 'queued' : ''} ${
                   draggingId === card.id ? 'dragging' : ''
                 } ${noPlayCardId === card.id ? 'no-play' : ''} ${
                   targetedByExploits.length > 0 ? 'exploit-target' : ''
                 } ${isDragTarget ? 'valid-target' : ''}`}
+                disabled={planLocked}
                 draggable={tone === 'green'}
                 onDragOver={(e) => {
                   // Always log for debugging
@@ -1867,68 +2064,68 @@ function App() {
                     console.log('Not calling planExploitOnCard - conditions not met');
                   }
                 }}
-            onDragStart={
-              tone === 'green'
-                ? (e) => {
-                    if (planLocked) {
-                      e.preventDefault();
-                      flashNoPlay(card.id, 'kitchenCard:onDragStart:planLocked');
-                      return;
-                    }
-                    onDragStart(card.id, 'kitchen')(e);
+                onDragStart={
+                  tone === 'green'
+                    ? (e) => {
+                        if (planLocked) {
+                          e.preventDefault();
+                          flashNoPlay(card.id, 'kitchenCard:onDragStart:planLocked');
+                          return;
+                        }
+                        onDragStart(card.id, 'kitchen')(e);
+                      }
+                    : undefined
+                }
+                onDragEnd={tone === 'green' ? onDragEnd : undefined}
+                onContextMenu={(e) => e.preventDefault()}
+                onPointerDown={
+                  tone === 'green'
+                    ? (e) => {
+                        e.preventDefault();
+                        nativeDragActive.current = false; // Reset for new drag operation
+                        if (planLocked) {
+                          flashNoPlay(card.id, 'kitchenCard:onPointerDown:planLocked');
+                          return;
+                        }
+                        setDraggingId(card.id);
+                        setIsPointerDragging(true);
+                        startHoldPreview(card)();
+                      }
+                    : undefined
+                }
+                onPointerMove={
+                  tone === 'green'
+                    ? () => {
+                        if (draggingId === card.id) {
+                          clearHoldTimer();
+                          setIsPointerDragging(true);
+                        }
+                      }
+                    : undefined
+                }
+                onPointerEnter={() => {
+                  // When dragging an exploit over a card, track it as the target
+                  if (draggingId && draggingCard?.kind === 'Exploit' && canUseExploitOnCard(draggingCard, card)) {
+                    console.log('🎯 onPointerEnter - setting target card:', card.name);
+                    setHoverTargetCard(card);
                   }
-                : undefined
-            }
-            onDragEnd={tone === 'green' ? onDragEnd : undefined}
-            onContextMenu={(e) => e.preventDefault()}
-            onPointerDown={
-              tone === 'green'
-                ? (e) => {
-                    e.preventDefault();
-                    nativeDragActive.current = false; // Reset for new drag operation
-                    if (planLocked) {
-                      flashNoPlay(card.id, 'kitchenCard:onPointerDown:planLocked');
-                      return;
-                    }
-                    setDraggingId(card.id);
-                    setIsPointerDragging(true);
-                    startHoldPreview(card)();
+                }}
+                onPointerLeave={() => {
+                  // Clear target card when leaving
+                  if (hoverTargetCard?.id === card.id) {
+                    console.log('🎯 onPointerLeave - clearing target card:', card.name);
+                    setHoverTargetCard(null);
                   }
-                : undefined
-            }
-            onPointerMove={
-              tone === 'green'
-                ? () => {
-                    if (draggingId === card.id) {
-                      clearHoldTimer();
-                      setIsPointerDragging(true);
-                    }
+                  // Also handle hold preview for green cards
+                  if (tone === 'green') {
+                    endHoldPreview();
                   }
-                : undefined
-            }
-            onPointerEnter={() => {
-              // When dragging an exploit over a card, track it as the target
-              if (draggingId && draggingCard?.kind === 'Exploit' && canUseExploitOnCard(draggingCard, card)) {
-                console.log('🎯 onPointerEnter - setting target card:', card.name);
-                setHoverTargetCard(card);
-              }
-            }}
-            onPointerLeave={() => {
-              // Clear target card when leaving
-              if (hoverTargetCard?.id === card.id) {
-                console.log('🎯 onPointerLeave - clearing target card:', card.name);
-                setHoverTargetCard(null);
-              }
-              // Also handle hold preview for green cards
-              if (tone === 'green') {
-                endHoldPreview();
-              }
-            }}
-            onClick={() => {
-              if (isPointerDragging) return;
-              handleInspectCard(card);
-            }}
-          >
+                }}
+                onClick={() => {
+                  if (isPointerDragging) return;
+                  handleInspectCard(card);
+                }}
+              >
                 <div className="card-top">
                   <span className="pill quiet">{card.currentVirality}</span>
                 </div>
@@ -1945,11 +2142,17 @@ function App() {
                     })}
                   </div>
                 )}
-              </div>
+              </HoloCard>
             );
           })}
         {planned.map((card) => (
-          <div key={`plan-${card.id}`} className={`kitchen-card surface pending ${planLocked ? 'locked' : ''}`}>
+          <HoloCard
+            key={`plan-${card.id}`}
+            kind={card.kind}
+            cost={card.cost}
+            className={`kitchen-card surface pending ${planLocked ? 'locked' : ''}`}
+            disabled
+          >
             <div className="card-top">
               <span className="pill quiet">{card.currentVirality}</span>
             </div>
@@ -1965,7 +2168,7 @@ function App() {
                 ×
               </button>
             )}
-          </div>
+          </HoloCard>
         ))}
         {cards.length === 0 && planned.length === 0 && <p className="muted small">Empty</p>}
       </div>
@@ -2099,78 +2302,80 @@ function App() {
                                    draggingCard.location === 'hand' && canUseExploitOnCard(draggingCard, card);
 
                 return (
-                  <div
+                  <HoloPill
                     key={card.id}
+                    kind={card.kind}
                     className={`feed-pill surface ${card.owner === mySeat ? 'mine' : 'enemy'} ${
                       isTargetedByExploit ? 'exploit-target' : ''
                     } ${isDragTarget ? 'valid-target' : ''}`}
-                  onClick={() => handleInspectCard(card)}
-                  onContextMenu={(e) => e.preventDefault()}
-                  onPointerEnter={() => {
-                    // When dragging an exploit over a feed card, track it as the target
-                    if (draggingId && draggingCard?.kind === 'Exploit' && canUseExploitOnCard(draggingCard, card)) {
-                      console.log('🎯 feed card onPointerEnter - setting target card:', card.name);
-                      setHoverTargetCard(card);
-                    }
-                  }}
-                  onPointerLeave={() => {
-                    // Clear target card when leaving
-                    if (hoverTargetCard?.id === card.id) {
-                      console.log('🎯 feed card onPointerLeave - clearing target card:', card.name);
-                      setHoverTargetCard(null);
-                    }
-                  }}
-                  onDragOver={(e) => {
-                    const draggingExploit =
-                      draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
-                    const draggingMeme =
-                      draggingCard && draggingCard.kind === 'Meme' && draggingCard.location === 'kitchen';
-                    if (
-                      (draggingExploit &&
-                        draggingCard &&
-                        (canUseExploitOnSlot(draggingCard) || canUseExploitOnCard(draggingCard, card))) ||
-                      (draggingMeme && getPlayableMeta(draggingCard).targets.feed)
-                    ) {
-                      e.preventDefault();
-                    }
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation(); // Prevent bubbling to feed zone handler
-                    const draggingExploit =
-                      draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
-                    const draggingMeme =
-                      draggingCard && draggingCard.kind === 'Meme' && draggingCard.location === 'kitchen';
-                    if (draggingExploit && draggingCard) {
-                      const profile = getExploitTargetProfile(getExploitEffect(draggingCard));
-                      if (canUseExploitOnCard(draggingCard, card)) {
-                        planExploitOnCard(card);
-                      } else if (profile.feedSlot && canUseExploitOnSlot(draggingCard)) {
-                        planExploitOnFeedSlot(idx);
-                      } else {
-                        flashNoPlay(draggingCard.id, 'feedCard:onDrop:noMatch');
+                    onClick={() => handleInspectCard(card)}
+                    onContextMenu={(e) => e.preventDefault()}
+                    onPointerEnter={() => {
+                      // When dragging an exploit over a feed card, track it as the target
+                      if (draggingId && draggingCard?.kind === 'Exploit' && canUseExploitOnCard(draggingCard, card)) {
+                        console.log('🎯 feed card onPointerEnter - setting target card:', card.name);
+                        setHoverTargetCard(card);
                       }
-                      setHoverZone(null);
-                      endHoldPreview();
-                      return;
-                    }
-                    if (draggingMeme && draggingCard) {
-                      performDrop('feed', draggingCard.id);
-                    }
-                  }}
-                >
+                    }}
+                    onPointerLeave={() => {
+                      // Clear target card when leaving
+                      if (hoverTargetCard?.id === card.id) {
+                        console.log('🎯 feed card onPointerLeave - clearing target card:', card.name);
+                        setHoverTargetCard(null);
+                      }
+                    }}
+                    onDragOver={(e) => {
+                      const draggingExploit =
+                        draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
+                      const draggingMeme =
+                        draggingCard && draggingCard.kind === 'Meme' && draggingCard.location === 'kitchen';
+                      if (
+                        (draggingExploit &&
+                          draggingCard &&
+                          (canUseExploitOnSlot(draggingCard) || canUseExploitOnCard(draggingCard, card))) ||
+                        (draggingMeme && getPlayableMeta(draggingCard).targets.feed)
+                      ) {
+                        e.preventDefault();
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation(); // Prevent bubbling to feed zone handler
+                      const draggingExploit =
+                        draggingCard && draggingCard.kind === 'Exploit' && draggingCard.location === 'hand';
+                      const draggingMeme =
+                        draggingCard && draggingCard.kind === 'Meme' && draggingCard.location === 'kitchen';
+                      if (draggingExploit && draggingCard) {
+                        const profile = getExploitTargetProfile(getExploitEffect(draggingCard));
+                        if (canUseExploitOnCard(draggingCard, card)) {
+                          planExploitOnCard(card);
+                        } else if (profile.feedSlot && canUseExploitOnSlot(draggingCard)) {
+                          planExploitOnFeedSlot(idx);
+                        } else {
+                          flashNoPlay(draggingCard.id, 'feedCard:onDrop:noMatch');
+                        }
+                        setHoverZone(null);
+                        endHoldPreview();
+                        return;
+                      }
+                      if (draggingMeme && draggingCard) {
+                        performDrop('feed', draggingCard.id);
+                      }
+                    }}
+                  >
                     <span className="feed-prefix">#{idx + 1}</span>
                     <span className="feed-name ellipsis">{card.name}</span>
                     <span className="feed-virality">{card.currentVirality}</span>
                     {isTargetedByExploit && (
                       <span className="exploit-indicator-small" title="Targeted by exploit">⚡</span>
                     )}
-                  </div>
+                  </HoloPill>
                 );
               })}
               {plannedFeedPosts.map((card, idx) => (
-                <div
+                <HoloPill
                   key={`plan-feed-${card.id}-${idx}`}
+                  kind={card.kind}
                   className={`feed-pill surface pending ${mySeat ? 'mine' : ''}`}
                 >
                   <span className="feed-prefix">#?</span>
@@ -2187,11 +2392,12 @@ function App() {
                       ×
                     </button>
                   )}
-                </div>
+                </HoloPill>
               ))}
               {plannedExploits.map((card, idx) => (
-                <div
+                <HoloPill
                   key={`plan-ex-${card.id}-${idx}`}
+                  kind={card.kind}
                   className={`feed-pill surface pending exploit-preview ${mySeat ? 'mine' : ''}`}
                 >
                   <span className="feed-prefix">⚡</span>
@@ -2208,7 +2414,7 @@ function App() {
                       ×
                     </button>
                   )}
-                </div>
+                </HoloPill>
               ))}
               {feedCards.length === 0 && plannedFeedPosts.length === 0 && plannedExploits.length === 0 && (
                 <p className="muted small">Feed is empty.</p>
@@ -2268,10 +2474,14 @@ function App() {
 
   const renderModalCard = () =>
     modalCard && (
-      <div className="modal-overlay" onClick={closeAllModals}>
-        <div className="modal-card surface" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-overlay modal-entering" onClick={closeAllModals}>
+        <div className="modal-card surface modal-quick" onClick={(e) => e.stopPropagation()}>
           <p className="muted small center">Tap anywhere to close</p>
-          <div className="big-card">
+          <HoloCard
+            kind={modalCard.kind}
+            cost={modalCard.cost}
+            className="big-card"
+          >
             {'variantId' in modalCard ? (
               <>
                 <span className="cost-badge">{(modalCard as LiveCard).cost}</span>
@@ -2302,7 +2512,7 @@ function App() {
                 </div>
               </>
             )}
-          </div>
+          </HoloCard>
         </div>
       </div>
     );
@@ -2311,8 +2521,8 @@ function App() {
     if (searchContext === 'none') return null;
     if (searchContext === 'lobby') {
       return (
-        <div className="modal-overlay" onClick={closeAllModals}>
-          <div className="search-modal surface" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay modal-entering" onClick={closeAllModals}>
+          <div className="search-modal surface modal-quick" onClick={(e) => e.stopPropagation()}>
             <div className="panel-header">
               <h3>Search for someone else</h3>
               <button className="ghost-btn compact" onClick={closeAllModals}>
@@ -2380,8 +2590,8 @@ function App() {
 
     if (searchContext === 'deck') {
       return (
-        <div className="modal-overlay" onClick={closeAllModals}>
-          <div className="search-modal surface" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay modal-entering" onClick={closeAllModals}>
+          <div className="search-modal surface modal-quick" onClick={(e) => e.stopPropagation()}>
             <div className="panel-header">
               <h3>Filter Cards</h3>
               <button className="ghost-btn compact" onClick={closeAllModals}>
@@ -2402,8 +2612,8 @@ function App() {
 
     if (searchContext === 'settings') {
       return (
-        <div className="modal-overlay" onClick={closeAllModals}>
-          <div className="search-modal surface" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-overlay modal-entering" onClick={closeAllModals}>
+          <div className="search-modal surface modal-quick" onClick={(e) => e.stopPropagation()}>
             <div className="panel-header">
             <h3>Search Settings</h3>
             <button className="ghost-btn compact" onClick={closeAllModals}>
@@ -2420,8 +2630,8 @@ function App() {
 
   const renderHostModal = () =>
     showHostModal && (
-      <div className="modal-overlay" onClick={() => setShowHostModal(false)}>
-        <div className="search-modal surface" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-overlay modal-entering" onClick={() => setShowHostModal(false)}>
+        <div className="search-modal surface modal-quick" onClick={(e) => e.stopPropagation()}>
           <div className="panel-header">
             <h3>Host Lobby</h3>
             <button className="ghost-btn compact" onClick={() => setShowHostModal(false)}>
@@ -2469,8 +2679,8 @@ function App() {
 
   const renderSettingsModal = () =>
     showSettingsModal && (
-      <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
-        <div className="search-modal surface" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-overlay modal-entering" onClick={() => setShowSettingsModal(false)}>
+        <div className="search-modal surface modal-quick" onClick={(e) => e.stopPropagation()}>
           <div className="panel-header">
             <h3>Game Menu</h3>
             <button className="ghost-btn compact" onClick={() => setShowSettingsModal(false)}>
@@ -2488,8 +2698,8 @@ function App() {
   const renderBasedModal = () => {
     if (!showBasedModal || !game) return null;
     return (
-      <div className="modal-overlay" onClick={(e) => e.stopPropagation()}>
-        <div className="search-modal surface based-modal">
+      <div className="modal-overlay modal-entering" onClick={(e) => e.stopPropagation()}>
+        <div className="search-modal surface based-modal modal-dramatic">
           <h3>Opponent called BASED. Call BASED to double stakes or retreat.</h3>
           <div className="stack">
             <button
@@ -2523,8 +2733,8 @@ function App() {
     if (!game?.winner) return null;
     const isWinner = game.winner === mySeat;
     return (
-      <div className="modal-overlay" onClick={(e) => e.stopPropagation()}>
-        <div className="search-modal surface win-lose-modal">
+      <div className="modal-overlay modal-entering" onClick={(e) => e.stopPropagation()}>
+        <div className={`search-modal surface win-lose-modal ${isWinner ? 'win' : 'lose'}`}>
           <h2 className={`win-lose-title ${isWinner ? 'win' : 'lose'}`}>
             {isWinner ? 'You Win!' : 'You Lose'}
           </h2>

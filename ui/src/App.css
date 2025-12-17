@@ -1186,6 +1186,845 @@
   flex-wrap: wrap;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOLOGRAPHIC CARD EFFECTS
+   Adapted from pokemon-cards-css for 3D tilt + holographic shine
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.holo-card {
+  --rotate-x: var(--holo-rotate-x, 0deg);
+  --rotate-y: var(--holo-rotate-y, 0deg);
+  --pointer-x: var(--holo-pointer-x, 50%);
+  --pointer-y: var(--holo-pointer-y, 50%);
+  --shine-opacity: var(--holo-shine-opacity, 0);
+  --scale: var(--holo-scale, 1);
+
+  position: relative;
+  transform-style: preserve-3d;
+  transform: perspective(600px)
+             rotateX(var(--rotate-x))
+             rotateY(var(--rotate-y))
+             scale(var(--scale));
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out;
+  will-change: transform;
+  overflow: hidden;
+}
+
+.holo-card:hover {
+  z-index: 10;
+}
+
+/* Shine layer - rainbow gradient that follows pointer */
+.holo-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    125deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.08) 25%,
+    var(--holo-color-1, var(--holo-meme-1)) 35%,
+    var(--holo-color-2, var(--holo-meme-2)) 50%,
+    var(--holo-color-3, var(--holo-meme-3)) 65%,
+    rgba(255, 255, 255, 0.08) 75%,
+    transparent 100%
+  );
+  background-size: 250% 250%;
+  background-position: var(--pointer-x) var(--pointer-y);
+  mix-blend-mode: screen;
+  opacity: var(--shine-opacity);
+  pointer-events: none;
+  z-index: 2;
+  transition: opacity 0.2s ease-out;
+}
+
+/* Glare overlay - radial highlight at pointer position */
+.holo-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--pointer-x) var(--pointer-y),
+    rgba(255, 255, 255, 0.35) 0%,
+    rgba(255, 255, 255, 0.1) 20%,
+    transparent 50%
+  );
+  mix-blend-mode: overlay;
+  opacity: var(--shine-opacity);
+  pointer-events: none;
+  z-index: 3;
+  transition: opacity 0.2s ease-out;
+}
+
+/* Card content layer - ensure it's above pseudo-elements */
+.holo-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─── MEME CARDS (Warm Spectrum) ─────────────────────────────────────────── */
+.holo-card.meme {
+  --holo-color-1: var(--holo-meme-1);
+  --holo-color-2: var(--holo-meme-2);
+  --holo-color-3: var(--holo-meme-3);
+}
+
+/* ─── EXPLOIT CARDS (Cool Spectrum) ──────────────────────────────────────── */
+.holo-card.exploit {
+  --holo-color-1: var(--holo-exploit-1);
+  --holo-color-2: var(--holo-exploit-2);
+  --holo-color-3: var(--holo-exploit-3);
+}
+
+/* ─── RARITY TIERS (Cost-based) ──────────────────────────────────────────── */
+
+/* Standard (cost 0-2): Base holographic */
+.holo-card.standard::before {
+  filter: saturate(1) brightness(1);
+}
+
+/* Rare (cost 3-4): Enhanced shine */
+.holo-card.rare::before {
+  filter: saturate(1.4) brightness(1.15);
+}
+
+.holo-card.rare::after {
+  background: radial-gradient(
+    circle at var(--pointer-x) var(--pointer-y),
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.15) 25%,
+    transparent 55%
+  );
+}
+
+/* Epic (cost 5+): Full rainbow + animated shimmer */
+.holo-card.epic::before {
+  filter: saturate(1.8) brightness(1.25);
+  animation: epic-shimmer 3s ease-in-out infinite;
+}
+
+.holo-card.epic::after {
+  background: radial-gradient(
+    circle at var(--pointer-x) var(--pointer-y),
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.2) 30%,
+    transparent 60%
+  );
+}
+
+@keyframes epic-shimmer {
+  0%, 100% {
+    filter: saturate(1.8) brightness(1.25) hue-rotate(0deg);
+  }
+  50% {
+    filter: saturate(2) brightness(1.35) hue-rotate(20deg);
+  }
+}
+
+/* ─── FEED PILL HOLO (Lighter effect for compact cards) ──────────────────── */
+.holo-pill {
+  position: relative;
+  overflow: hidden;
+}
+
+.holo-pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--holo-color-1, var(--holo-meme-1)) 30%,
+    var(--holo-color-2, var(--holo-meme-2)) 50%,
+    var(--holo-color-3, var(--holo-meme-3)) 70%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  mix-blend-mode: color-dodge;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-out, background-position 0.3s ease-out;
+}
+
+.holo-pill:hover::before {
+  opacity: 0.6;
+  animation: pill-shimmer 1.5s ease-in-out infinite;
+}
+
+.holo-pill.meme {
+  --holo-color-1: var(--holo-meme-1);
+  --holo-color-2: var(--holo-meme-2);
+  --holo-color-3: var(--holo-meme-3);
+}
+
+.holo-pill.exploit {
+  --holo-color-1: var(--holo-exploit-1);
+  --holo-color-2: var(--holo-exploit-2);
+  --holo-color-3: var(--holo-exploit-3);
+}
+
+@keyframes pill-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: -100% 50%; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   JUICY ANIMATIONS - Making the frontend feel GOOD
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── MODAL ANIMATIONS ──────────────────────────────────────────────────────── */
+
+/* Quick modals (card inspect, settings, search) - 180ms snap */
+@keyframes modalQuickIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes modalQuickOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(6px);
+  }
+}
+
+@keyframes overlayFadeOut {
+  from {
+    opacity: 1;
+    backdrop-filter: blur(6px);
+  }
+  to {
+    opacity: 0;
+    backdrop-filter: blur(0);
+  }
+}
+
+/* Dramatic modals (BASED response, GameOver) - 400ms with bounce */
+@keyframes modalDramaticIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) translateY(50px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.06) translateY(-8px);
+  }
+  80% {
+    transform: scale(0.97) translateY(3px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes winGlow {
+  0%, 100% {
+    box-shadow: 0 0 30px rgba(74, 222, 128, 0.3),
+                0 0 60px rgba(74, 222, 128, 0.15),
+                inset 0 0 20px rgba(74, 222, 128, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 50px rgba(74, 222, 128, 0.5),
+                0 0 100px rgba(74, 222, 128, 0.25),
+                inset 0 0 30px rgba(74, 222, 128, 0.1);
+  }
+}
+
+@keyframes loseShake {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  10% { transform: translateX(-8px) rotate(-1deg); }
+  20% { transform: translateX(8px) rotate(1deg); }
+  30% { transform: translateX(-6px) rotate(-0.5deg); }
+  40% { transform: translateX(6px) rotate(0.5deg); }
+  50% { transform: translateX(-4px) rotate(0); }
+  60% { transform: translateX(4px) rotate(0); }
+  70% { transform: translateX(-2px) rotate(0); }
+  80% { transform: translateX(2px) rotate(0); }
+}
+
+/* Modal animation classes */
+.modal-overlay.modal-entering {
+  animation: overlayFadeIn 180ms ease-out forwards;
+}
+
+.modal-overlay.modal-exiting {
+  animation: overlayFadeOut 150ms ease-in forwards;
+}
+
+.modal-card.modal-quick {
+  animation: modalQuickIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modal-card.modal-quick.modal-exiting {
+  animation: modalQuickOut 150ms ease-in forwards;
+}
+
+.modal-card.modal-dramatic {
+  animation: modalDramaticIn 400ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.win-lose-modal.win {
+  animation: modalDramaticIn 400ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+             winGlow 2s ease-in-out infinite 400ms;
+}
+
+.win-lose-modal.lose {
+  animation: modalDramaticIn 400ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+             loseShake 0.6s ease-in-out 400ms;
+}
+
+/* ─── CARD MOVEMENT ANIMATIONS ──────────────────────────────────────────────── */
+
+/* Hand → Kitchen (meme play) */
+@keyframes cardToKitchen {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  40% {
+    transform: scale(0.9) translateY(-20px);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(0.6) translateY(-80px);
+    opacity: 0;
+  }
+}
+
+@keyframes cardLandKitchen {
+  0% {
+    transform: scale(0.5) translateY(-30px);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08) translateY(4px);
+    opacity: 1;
+  }
+  80% {
+    transform: scale(0.96);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Kitchen zone pulse when receiving card */
+@keyframes zonePulse {
+  0% {
+    box-shadow: inset 0 0 0 rgba(108, 240, 181, 0);
+  }
+  50% {
+    box-shadow: inset 0 0 25px rgba(108, 240, 181, 0.25);
+  }
+  100% {
+    box-shadow: inset 0 0 0 rgba(108, 240, 181, 0);
+  }
+}
+
+/* Kitchen → Feed (posting) */
+@keyframes cardToFeed {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(60px) scale(0.7);
+    opacity: 0;
+  }
+}
+
+@keyframes feedPillSlam {
+  0% {
+    transform: scale(0.3) translateY(-20px);
+    opacity: 0;
+  }
+  65% {
+    transform: scale(1.1) translateY(3px);
+    opacity: 1;
+  }
+  85% {
+    transform: scale(0.95) translateY(-1px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Animation classes for cards */
+.hand-card.anim-to-kitchen {
+  animation: cardToKitchen 280ms ease-in forwards;
+  pointer-events: none;
+}
+
+.kitchen-card.anim-landing {
+  animation: cardLandKitchen 320ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.kitchen-row.anim-receiving {
+  animation: zonePulse 400ms ease-out;
+}
+
+.kitchen-card.anim-to-feed {
+  animation: cardToFeed 250ms ease-in forwards;
+  pointer-events: none;
+}
+
+.feed-pill.anim-slam {
+  animation: feedPillSlam 350ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ─── OFFENSIVE EXPLOIT EFFECTS (POW Style) ─────────────────────────────────── */
+
+/* Screen-wide impact flash */
+@keyframes impactFlash {
+  0% {
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.4;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.screen-flash {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  animation: impactFlash 200ms ease-out forwards;
+}
+
+.screen-flash.damage {
+  background: radial-gradient(circle at center,
+    rgba(255, 107, 107, 0.5) 0%,
+    rgba(255, 60, 60, 0.3) 30%,
+    transparent 70%);
+}
+
+/* Comic POW burst overlay */
+@keyframes powBurst {
+  0% {
+    transform: translate(-50%, -50%) scale(0) rotate(-15deg);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.2) rotate(5deg);
+    opacity: 1;
+  }
+  75% {
+    transform: translate(-50%, -50%) scale(0.95) rotate(-2deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+
+@keyframes powFade {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+}
+
+.pow-overlay {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Impact', 'Arial Black', system-ui, sans-serif;
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: white;
+  text-shadow:
+    3px 3px 0 #ff6b6b,
+    -1px -1px 0 #ff6b6b,
+    1px -1px 0 #ff6b6b,
+    -1px 1px 0 #ff6b6b,
+    0 4px 8px rgba(0, 0, 0, 0.4);
+  background: radial-gradient(ellipse,
+    rgba(255, 220, 50, 0.95) 0%,
+    rgba(255, 140, 50, 0.9) 35%,
+    rgba(255, 80, 80, 0.6) 60%,
+    transparent 75%);
+  border-radius: 50%;
+  width: 120px;
+  height: 90px;
+  z-index: 110;
+  animation: powBurst 300ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.pow-overlay.fading {
+  animation: powFade 250ms ease-out forwards;
+}
+
+/* Target card recoil when hit */
+@keyframes damageRecoil {
+  0%, 100% {
+    transform: translateX(0);
+    filter: brightness(1);
+  }
+  20% {
+    transform: translateX(-8px);
+    filter: brightness(1.6);
+  }
+  40% {
+    transform: translateX(6px);
+    filter: brightness(0.7);
+  }
+  60% {
+    transform: translateX(-4px);
+    filter: brightness(1.3);
+  }
+  80% {
+    transform: translateX(2px);
+    filter: brightness(0.9);
+  }
+}
+
+/* Card death/execute animation */
+@keyframes cardExecute {
+  0% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+    filter: saturate(1);
+  }
+  35% {
+    transform: scale(1.15) rotate(-8deg);
+    filter: saturate(2.5) brightness(1.5);
+  }
+  70% {
+    transform: scale(0.6) rotate(15deg);
+    opacity: 0.5;
+    filter: saturate(0) brightness(0.4);
+  }
+  100% {
+    transform: scale(0) rotate(90deg);
+    opacity: 0;
+  }
+}
+
+/* Kitchen shake for area damage */
+@keyframes kitchenShake {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  10% { transform: translateX(-4px) translateY(-2px); }
+  20% { transform: translateX(4px) translateY(1px); }
+  30% { transform: translateX(-3px) translateY(-1px); }
+  40% { transform: translateX(3px) translateY(2px); }
+  50% { transform: translateX(-2px) translateY(-1px); }
+  60% { transform: translateX(2px) translateY(1px); }
+  70% { transform: translateX(-1px) translateY(0); }
+  80% { transform: translateX(1px) translateY(0); }
+}
+
+/* Floating damage number */
+@keyframes damageFloat {
+  0% {
+    transform: translateY(0) scale(0.5);
+    opacity: 0;
+  }
+  25% {
+    transform: translateY(-15px) scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-50px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.damage-number {
+  position: absolute;
+  font-weight: 900;
+  font-size: 1.4rem;
+  color: #ff6b6b;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 50;
+  animation: damageFloat 600ms ease-out forwards;
+}
+
+/* Exploit effect classes */
+.kitchen-card.damage-recoil,
+.feed-pill.damage-recoil {
+  animation: damageRecoil 400ms ease-out;
+}
+
+.kitchen-card.card-execute,
+.feed-pill.card-execute {
+  animation: cardExecute 500ms ease-in forwards;
+}
+
+.kitchen-row.kitchen-shake {
+  animation: kitchenShake 450ms ease-out;
+}
+
+/* ─── DEFENSIVE EXPLOIT EFFECTS (Shield/Glow) ───────────────────────────────── */
+
+/* Shield appearing (Protect) */
+@keyframes shieldUp {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+    box-shadow: 0 0 0 rgba(108, 240, 181, 0);
+  }
+  60% {
+    transform: scale(1.1);
+    opacity: 1;
+    box-shadow: 0 0 25px rgba(108, 240, 181, 0.6);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(108, 240, 181, 0.35);
+  }
+}
+
+.shield-overlay {
+  position: absolute;
+  inset: -4px;
+  border: 3px solid var(--accent-3);
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 15;
+  animation: shieldUp 400ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Power up glow (Boost) */
+@keyframes powerUpGlow {
+  0% {
+    filter: brightness(1);
+    box-shadow: inset 0 0 0 transparent;
+  }
+  40% {
+    filter: brightness(1.35);
+    box-shadow: inset 0 0 30px rgba(122, 209, 255, 0.5),
+                0 0 20px rgba(122, 209, 255, 0.4);
+  }
+  100% {
+    filter: brightness(1.1);
+    box-shadow: inset 0 0 15px rgba(122, 209, 255, 0.2),
+                0 0 8px rgba(122, 209, 255, 0.2);
+  }
+}
+
+.kitchen-card.power-up,
+.feed-pill.power-up {
+  animation: powerUpGlow 500ms ease-out forwards;
+}
+
+/* Double effect (To The Moon) */
+@keyframes doubleGlow {
+  0% {
+    filter: brightness(1);
+    box-shadow: 0 0 0 transparent;
+  }
+  30% {
+    filter: brightness(1.5) saturate(1.5);
+    box-shadow: 0 0 40px rgba(255, 200, 50, 0.6),
+                inset 0 0 25px rgba(255, 200, 50, 0.3);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    filter: brightness(1.15) saturate(1.2);
+    transform: scale(1);
+    box-shadow: 0 0 15px rgba(255, 200, 50, 0.3);
+  }
+}
+
+.kitchen-card.double-up,
+.feed-pill.double-up {
+  animation: doubleGlow 600ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Resurrect rising effect */
+@keyframes resurrectRise {
+  0% {
+    transform: translateY(40px) scale(0.4);
+    opacity: 0;
+    filter: grayscale(1) brightness(0.3);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.1);
+    opacity: 1;
+    filter: grayscale(0) brightness(1.6);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    filter: grayscale(0) brightness(1);
+  }
+}
+
+.hand-card.resurrect {
+  animation: resurrectRise 500ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Stat change pulse */
+@keyframes statPulse {
+  0%, 100% {
+    transform: scale(1);
+    color: inherit;
+  }
+  50% {
+    transform: scale(1.4);
+    color: var(--accent-3);
+  }
+}
+
+.stat-changed {
+  animation: statPulse 350ms ease-out;
+}
+
+/* ─── MICRO-INTERACTIONS ────────────────────────────────────────────────────── */
+
+/* Satisfying button press */
+@keyframes buttonPress {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+}
+
+button:active:not(:disabled) {
+  animation: buttonPress 100ms ease-out;
+}
+
+/* Mana dot fill animation */
+@keyframes manaFill {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.mana-dot.filling {
+  animation: manaFill 300ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Enhanced card hover lift */
+.holo-card:not(.pending):not(.queued):hover {
+  transform: perspective(600px)
+             rotateX(var(--rotate-x))
+             rotateY(var(--rotate-y))
+             scale(var(--scale))
+             translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+/* Score bar smooth climb */
+.score-fill {
+  transition: height 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Turn indicator pulse */
+@keyframes turnPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.06);
+  }
+}
+
+.status-flag.your-turn {
+  animation: turnPulse 1.5s ease-in-out infinite;
+  color: var(--accent-3);
+}
+
+/* Hand expand/collapse smooth */
+.hand-expanded {
+  animation: expandIn 250ms ease-out;
+}
+
+@keyframes expandIn {
+  from {
+    opacity: 0.8;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── REDUCED MOTION ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .holo-card {
+    transform: none;
+    transition: none;
+  }
+
+  .holo-card::before,
+  .holo-card::after {
+    animation: none;
+    transition: none;
+  }
+
+  .holo-pill::before {
+    animation: none;
+  }
+
+  /* Disable all juicy animations */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .pow-overlay,
+  .screen-flash,
+  .shield-overlay,
+  .damage-number {
+    display: none !important;
+  }
+}
+
 @media (max-width: 960px) {
   .app-shell {
     padding-bottom: 5.75rem;
