@@ -440,6 +440,8 @@ function App() {
   const opponentExploitTimer = useRef<number | null>(null);
   const pendingExploitNotification = useRef<Array<{ card_id: string; target: any }> | null>(null);
   const lastExploitTurn = useRef<number | null>(null);
+  const previousOpponentAbyss = useRef<Set<string>>(new Set());
+  const opponentAbyssInitialized = useRef(false);
 
   const activePlan = useMemo(() => pendingReveal?.plan ?? draftPlan, [pendingReveal, draftPlan]);
   const queuedToKitchen = useMemo(() => new Set(activePlan.plays_to_kitchen), [activePlan]);
@@ -759,6 +761,44 @@ function App() {
     return profile;
   };
 
+  const clearOpponentExploitTimer = useCallback(() => {
+    if (opponentExploitTimer.current) {
+      clearTimeout(opponentExploitTimer.current);
+      opponentExploitTimer.current = null;
+    }
+  }, []);
+
+  const triggerOpponentExploitNotification = useCallback(
+    (exploits: Array<{ card_id: string; target: any }>, turnTag: number | null = game?.turn ?? null) => {
+      if (!exploits.length) return;
+      if (turnTag !== null) {
+        // Avoid double-firing in the same turn
+        if (lastExploitTurn.current === turnTag) return;
+        lastExploitTurn.current = turnTag;
+      }
+
+      if (showBasedModal) {
+        pendingExploitNotification.current = exploits;
+        return;
+      }
+
+      setOpponentExploits(exploits);
+      clearOpponentExploitTimer();
+      opponentExploitTimer.current = window.setTimeout(() => {
+        setOpponentExploits([]);
+        opponentExploitTimer.current = null;
+      }, 5000);
+    },
+    [clearOpponentExploitTimer, game?.turn, showBasedModal],
+  );
+
+  // Reset exploit tracking between games
+  useEffect(() => {
+    previousOpponentAbyss.current = new Set();
+    opponentAbyssInitialized.current = false;
+    lastExploitTurn.current = null;
+  }, [game?.game_seed]);
+
   // Track opponent exploits when turn resolves
   useEffect(() => {
     if (!game || !mySeat || !opponentPlayer) return;
@@ -766,39 +806,43 @@ function App() {
     // Check if opponent has revealed exploits
     const opponentCommit = opponentPlayer.commit;
     if (opponentCommit?.revealed && opponentCommit.revealed.exploits.length > 0) {
-      // Only show if we haven't shown for this turn yet
-      if (lastExploitTurn.current === game.turn) return;
-      lastExploitTurn.current = game.turn;
-
-      const exploits = opponentCommit.revealed.exploits;
-
-      // If BASED modal is showing, store for later
-      if (showBasedModal) {
-        pendingExploitNotification.current = exploits;
-        return;
-      }
-
-      // Show opponent exploits
-      setOpponentExploits(exploits);
-
-      // Clear previous timer
-      if (opponentExploitTimer.current) {
-        clearTimeout(opponentExploitTimer.current);
-      }
-
-      // Set timer to hide exploits after 5 seconds
-      opponentExploitTimer.current = window.setTimeout(() => {
-        setOpponentExploits([]);
-        opponentExploitTimer.current = null;
-      }, 5000);
+      triggerOpponentExploitNotification(opponentCommit.revealed.exploits, game.turn);
     }
 
     return () => {
-      if (opponentExploitTimer.current) {
-        clearTimeout(opponentExploitTimer.current);
-      }
+      clearOpponentExploitTimer();
     };
-  }, [game?.turn, opponentPlayer?.commit?.revealed?.exploits?.length ?? 0, showBasedModal]);
+  }, [
+    clearOpponentExploitTimer,
+    game?.turn,
+    opponentPlayer?.commit?.revealed?.exploits?.length ?? 0,
+    showBasedModal,
+    triggerOpponentExploitNotification,
+  ]);
+
+  // Fallback: detect newly cast exploits by watching the opponent's abyss (cards move there when cast)
+  useEffect(() => {
+    if (!game || !opponentPlayer) return;
+
+    const currentAbyss = opponentPlayer.abyss || [];
+    const currentIds = new Set(currentAbyss.map((card) => card.instance_id));
+
+    // Skip the initial snapshot to avoid spurious notifications
+    if (!opponentAbyssInitialized.current) {
+      previousOpponentAbyss.current = currentIds;
+      opponentAbyssInitialized.current = true;
+      return;
+    }
+
+    const newCards = currentAbyss.filter((card) => !previousOpponentAbyss.current.has(card.instance_id));
+    previousOpponentAbyss.current = currentIds;
+
+    const newExploitCards = newCards.filter((card) => 'Exploit' in (card.class as any));
+    if (newExploitCards.length === 0) return;
+
+    const exploits = newExploitCards.map((card) => ({ card_id: card.instance_id, target: null }));
+    triggerOpponentExploitNotification(exploits, game.turn);
+  }, [game?.game_seed, game?.turn, opponentPlayer?.abyss, opponentPlayer?.node_id, triggerOpponentExploitNotification]);
 
   // Show pending exploits when BASED modal closes
   useEffect(() => {
@@ -806,18 +850,9 @@ function App() {
       const exploits = pendingExploitNotification.current;
       pendingExploitNotification.current = null;
 
-      setOpponentExploits(exploits);
-
-      if (opponentExploitTimer.current) {
-        clearTimeout(opponentExploitTimer.current);
-      }
-
-      opponentExploitTimer.current = window.setTimeout(() => {
-        setOpponentExploits([]);
-        opponentExploitTimer.current = null;
-      }, 5000);
+      triggerOpponentExploitNotification(exploits);
     }
-  }, [showBasedModal]);
+  }, [showBasedModal, triggerOpponentExploitNotification]);
 
   useEffect(() => {
     if (!pendingReveal || !game || !mySeat) return;
