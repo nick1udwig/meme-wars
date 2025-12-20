@@ -4,10 +4,11 @@
   "image": "https://raw.githubusercontent.com/nick1udwig/meme-wars/refs/heads/master/assets/pepe.jpg",
   "properties": {
     "package_name": "meme-wars",
-    "current_version": "0.1.0",
+    "current_version": "0.1.1",
     "publisher": "nick.hypr",
     "mirrors": ["nick.hypr", "nick1udwig.os"],
     "code_hashes": {
+      "0.1.1": "c07bfa04d9276d4563bf974753da247b8e5bc0055c0e2a6756bb555a99489bfb",
       "0.1.0": "e75494bc4918be38defcc510d64ef6690d437701cdfd3ff190cbda87aa2777af"
     },
     "wit_version": 1,
