@@ -1761,9 +1761,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyperprocess_macro"
-version = "0.1.0"
-source = "git+https://github.com/hyperware-ai/hyperprocess-macro?rev=aaf7e02#aaf7e025b5047534f89b794ef645eb158bb88d37"
+name = "hyperapp_macro"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "061414cb1a535e9e2a9c98ac112c1ac770552ae53d6f6309133cdccf5c251659"
 dependencies = [
  "hyperware_process_lib",
  "proc-macro2",
@@ -1773,8 +1774,9 @@ dependencies = [
 
 [[package]]
 name = "hyperware_process_lib"
-version = "2.2.0"
-source = "git+https://github.com/hyperware-ai/process_lib?rev=e8b065179ce5d15893a23142416e59c87e0f31f6#e8b065179ce5d15893a23142416e59c87e0f31f6"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c380fcf57586e4373553e909c93191d7ca8c10e1af7f7af58c83b7b9efbd4703"
 dependencies = [
  "alloy",
  "alloy-primitives",
@@ -1784,6 +1786,7 @@ dependencies = [
  "base64",
  "bincode",
  "color-eyre",
+ "futures-channel",
  "futures-util",
  "http",
  "mime_guess",
@@ -2136,7 +2139,7 @@ name = "meme-wars"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "hyperprocess_macro",
+ "hyperapp_macro",
  "hyperware_process_lib",
  "mcg_caller_utils",
  "process_macros",

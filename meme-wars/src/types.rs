@@ -264,6 +264,8 @@ pub struct Lobby {
     pub description: String,
     pub opponent: Option<String>,
     pub started: bool,
+    pub host_deck: Vec<String>,
+    pub opponent_deck: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -271,6 +273,7 @@ pub struct LobbyConfig {
     pub mode: String,
     pub stakes: u8,
     pub description: String,
+    pub deck: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]

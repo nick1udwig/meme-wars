@@ -6,11 +6,11 @@ import { getNodeId } from '../types/global';
 type WsClientMessage =
   | { type: 'GetSnapshot' }
   | { type: 'NewGame'; data?: { opponent?: string | null } }
-  | { type: 'HostLobby'; data: { mode: string; stakes: number; description: string } }
-  | { type: 'JoinLobby'; data: { lobby_id: string } }
+  | { type: 'HostLobby'; data: { mode: string; stakes: number; description: string; deck: string[] } }
+  | { type: 'JoinLobby'; data: { lobby_id: string; deck: string[] } }
   | { type: 'StartLobbyGame'; data: { lobby_id: string } }
   | { type: 'FetchRemoteLobbies'; data: { host_node: string } }
-  | { type: 'JoinRemoteLobby'; data: { host_node: string; lobby_id: string } }
+  | { type: 'JoinRemoteLobby'; data: { host_node: string; lobby_id: string; deck: string[] } }
   | { type: 'SyncRemoteGame'; data: { host_node: string } }
   | { type: 'CommitTurn'; data: { seat: Seat; plan: TurnPlan; salt: string; turn: number } }
   | { type: 'RevealTurn'; data: { seat: Seat; plan: TurnPlan; salt: string; turn: number } }
@@ -49,9 +49,9 @@ interface McgStore extends McgState {
   initialize: () => void;
   fetchSnapshot: () => Promise<void>;
   startGame: (opponent?: string | null) => Promise<void>;
-  hostLobby: (config: { mode: string; stakes: number; description: string }) => Promise<void>;
-  joinLobby: (lobbyId: string) => Promise<void>;
-  joinRemoteLobby: (hostNode: string, lobbyId: string) => Promise<void>;
+  hostLobby: (config: { mode: string; stakes: number; description: string; deck: string[] }) => Promise<void>;
+  joinLobby: (lobbyId: string, deck: string[]) => Promise<void>;
+  joinRemoteLobby: (hostNode: string, lobbyId: string, deck: string[]) => Promise<void>;
   fetchRemoteLobbies: (hostNode: string) => Promise<void>;
   syncRemoteGame: (hostNode: string) => Promise<void>;
   startLobbyGame: (lobbyId: string) => Promise<void>;
@@ -221,12 +221,12 @@ export const useMcgStore = create<McgStore>((set, get) => {
       await run({ type: 'HostLobby', data: config });
     },
 
-    joinLobby: async (lobbyId) => {
-      await run({ type: 'JoinLobby', data: { lobby_id: lobbyId } });
+    joinLobby: async (lobbyId, deck) => {
+      await run({ type: 'JoinLobby', data: { lobby_id: lobbyId, deck } });
     },
 
-    joinRemoteLobby: async (hostNode, lobbyId) => {
-      await run({ type: 'JoinRemoteLobby', data: { host_node: hostNode, lobby_id: lobbyId } });
+    joinRemoteLobby: async (hostNode, lobbyId, deck) => {
+      await run({ type: 'JoinRemoteLobby', data: { host_node: hostNode, lobby_id: lobbyId, deck } });
     },
 
     fetchRemoteLobbies: async (hostNode) => {

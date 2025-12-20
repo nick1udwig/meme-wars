@@ -404,6 +404,7 @@ function App() {
   const [modalCard, setModalCard] = useState<{ card: UICardDefinition | LiveCard; rect: DOMRect } | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showHostModal, setShowHostModal] = useState(false);
+  const [pendingLobbyAction, setPendingLobbyAction] = useState<{ lobby: Lobby; action: 'start' | 'join' } | null>(null);
   const [hostForm, setHostForm] = useState({ mode: 'Standard', stakes: 1, description: 'Public lobby' });
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [lastSyncedHost, setLastSyncedHost] = useState<string | null>(null);
@@ -1034,11 +1035,11 @@ function App() {
     setModalCard(null);
   };
 
-  const handleJoinLobbyClick = async (lobby: Lobby) => {
+  const handleJoinLobbyClick = async (lobby: Lobby, deckCards: string[]) => {
     if (nodeId && lobby.host !== nodeId) {
-      await joinRemoteLobby(lobby.host, lobby.id);
+      await joinRemoteLobby(lobby.host, lobby.id, deckCards);
     } else {
-      await joinLobby(lobby.id);
+      await joinLobby(lobby.id, deckCards);
     }
   };
 
@@ -1684,12 +1685,6 @@ function App() {
         <button className="ghost-btn compact" onClick={() => setShowHostModal(true)}>
           <Icon name="plus" size={16} /> Host
         </button>
-        <button className="ghost-btn compact" onClick={() => startGame().then(() => setActiveScreen('duel'))}>
-          Local Duel
-        </button>
-        <button className="icon-btn" onClick={() => setSearchContext('lobby')} aria-label="Search lobbies">
-          <Icon name="search" />
-        </button>
       </div>
       {isLoading && <p className="muted small">Syncing with backend…</p>}
       {error && !(searchContext === 'lobby' && error === 'cannot fetch remote lobbies from self') && (
@@ -1718,14 +1713,14 @@ function App() {
               </div>
               <div className="lobby-actions-inline">
                 {!lobby.started && !isHost && !lobby.opponent && (
-                  <button className="ghost-btn compact" onClick={() => handleJoinLobbyClick(lobby)}>
+                  <button className="ghost-btn compact" onClick={() => setPendingLobbyAction({ lobby, action: 'join' })}>
                     Join
                   </button>
                 )}
                 {canStart && (
                   <button
                     className="ghost-btn compact"
-                    onClick={() => startLobbyGame(lobby.id).then(() => setActiveScreen('duel'))}
+                    onClick={() => setPendingLobbyAction({ lobby, action: 'start' })}
                   >
                     Start
                   </button>
@@ -1851,7 +1846,7 @@ function App() {
   );
 
   const renderDeckBuilder = () => (
-    <div className="deck-screen">
+    <div className="screen-panel deck-screen">
       {renderDeckSelection()}
       <div className="deck-main">
         {renderDeckContents()}
@@ -2623,7 +2618,7 @@ function App() {
                         <button
                           className="ghost-btn compact"
                           onClick={() => {
-                            handleJoinLobbyClick(lobby);
+                            setPendingLobbyAction({ lobby, action: 'join' });
                             closeAllModals();
                           }}
                         >
@@ -2720,7 +2715,8 @@ function App() {
           <button
             className="save-btn"
             onClick={async () => {
-              await hostLobby(hostForm);
+              const selectedDeck = decks.find((d) => d.id === selectedDeckId);
+              await hostLobby({ ...hostForm, deck: selectedDeck?.cards ?? [] });
               setShowHostModal(false);
             }}
           >
@@ -2729,6 +2725,57 @@ function App() {
         </div>
       </div>
     );
+
+  const renderDeckSelectModal = () => {
+    if (!pendingLobbyAction) return null;
+    const selectedDeck = decks.find((d) => d.id === selectedDeckId);
+    const handleConfirm = async () => {
+      if (!selectedDeck) return;
+      const { lobby, action } = pendingLobbyAction;
+      setPendingLobbyAction(null);
+      if (action === 'join') {
+        await handleJoinLobbyClick(lobby, selectedDeck.cards);
+      } else {
+        await startLobbyGame(lobby.id);
+        setActiveScreen('duel');
+      }
+    };
+    return (
+      <div className="modal-overlay modal-entering" onClick={() => setPendingLobbyAction(null)}>
+        <div className="search-modal surface modal-quick deck-select-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="panel-header">
+            <h3>Select Deck</h3>
+            <button className="ghost-btn compact" onClick={() => setPendingLobbyAction(null)}>
+              Close
+            </button>
+          </div>
+          <p className="muted small" style={{ marginBottom: '0.75rem' }}>
+            {pendingLobbyAction.action === 'join' ? 'Joining' : 'Starting'} <strong>{pendingLobbyAction.lobby.host}</strong>'s lobby
+          </p>
+          <div className="deck-select-list">
+            {decks.map((deck, index) => (
+              <button
+                key={deck.id}
+                className={`deck-select-item surface ${deck.id === selectedDeckId ? 'active' : ''}`}
+                onClick={() => setSelectedDeckId(deck.id)}
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <span className="deck-select-name">{deck.name}</span>
+                <span className="deck-select-count muted">{deck.cards.length}/12</span>
+              </button>
+            ))}
+          </div>
+          <button
+            className="save-btn"
+            onClick={handleConfirm}
+            disabled={!selectedDeck || selectedDeck.cards.length === 0}
+          >
+            {pendingLobbyAction.action === 'join' ? 'Join Game' : 'Start Game'}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const renderSettingsModal = () =>
     showSettingsModal && (
@@ -2839,18 +2886,28 @@ function App() {
       {[
         { key: 'lobby', label: 'Lobby', icon: 'home' },
         { key: 'deck', label: 'Decks', icon: 'library' },
+        { key: 'search', label: 'Search', icon: 'search' },
         { key: 'settings', label: 'Settings', icon: 'settings' },
-        { key: 'duel', label: 'Duel', icon: 'sword' },
-      ].map((item) => (
-        <button
-          key={item.key}
-          className={`desktop-nav-btn ${activeScreen === item.key ? 'active' : ''}`}
-          onClick={() => setActiveScreen(item.key as Screen)}
-        >
-          <Icon name={item.icon} size={18} />
-          <span>{item.label}</span>
-        </button>
-      ))}
+      ].map((item) => {
+        const isSearch = item.key === 'search';
+        const isActive = activeScreen === item.key || (isSearch && searchContext !== 'none');
+        return (
+          <button
+            key={item.key}
+            className={`desktop-nav-btn ${isActive ? 'active' : ''}`}
+            onClick={() => {
+              if (isSearch) {
+                handleSearchNav();
+              } else {
+                setActiveScreen(item.key as Screen);
+              }
+            }}
+          >
+            <Icon name={item.icon} size={18} />
+            <span>{item.label}</span>
+          </button>
+        );
+      })}
     </aside>
   );
 
@@ -2870,6 +2927,7 @@ function App() {
       {activeScreen !== 'duel' && renderBottomNav()}
       {renderSearchModal()}
       {renderHostModal()}
+      {renderDeckSelectModal()}
       {renderSettingsModal()}
       {renderBasedModal()}
       {renderWinLoseModal()}

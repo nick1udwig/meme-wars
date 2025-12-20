@@ -29,6 +29,7 @@ pub struct StakeNotice {
 pub struct JoinLobbyPayload {
     pub lobby_id: String,
     pub node_id: String,
+    pub deck: Vec<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -63,6 +64,7 @@ pub enum WsClientMessage {
     HostLobby(crate::types::LobbyConfig),
     JoinLobby {
         lobby_id: String,
+        deck: Vec<String>,
     },
     StartLobbyGame {
         lobby_id: String,
@@ -73,6 +75,7 @@ pub enum WsClientMessage {
     JoinRemoteLobby {
         host_node: String,
         lobby_id: String,
+        deck: Vec<String>,
     },
     SyncRemoteGame {
         host_node: String,

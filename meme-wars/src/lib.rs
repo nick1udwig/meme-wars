@@ -1,4 +1,3 @@
-use hyperprocess_macro::hyperprocess;
 use hyperware_process_lib::http::server::{self, WsMessageType};
 use hyperware_process_lib::{
     homepage::add_to_homepage,
@@ -49,7 +48,7 @@ fn process_id() -> ProcessId {
 
 // Hyperprocess entrypoint. Behavior is unchanged from the monolithic version; logic has been
 // reorganized into modules for clarity.
-#[hyperprocess(
+#[hyperapp_macro::hyperapp(
     name = "Meme Wars",
     ui = Some(hyperware_process_lib::http::server::HttpBindingConfig::default()),
     endpoints = vec![
@@ -112,6 +111,8 @@ impl MemeWarsState {
             description: config.description,
             opponent: None,
             started: false,
+            host_deck: config.deck,
+            opponent_deck: vec![],
         };
         self.lobbies.push(lobby);
         let snapshot = self.compose_snapshot();
@@ -121,7 +122,8 @@ impl MemeWarsState {
 
     #[local]
     #[http]
-    async fn join_lobby(&mut self, lobby_id: String) -> Result<GameSnapshot, String> {
+    async fn join_lobby(&mut self, params: (String, Vec<String>)) -> Result<GameSnapshot, String> {
+        let (lobby_id, deck) = params;
         let lobby = self
             .lobbies
             .iter_mut()
@@ -131,6 +133,7 @@ impl MemeWarsState {
             return Err("Lobby already has an opponent".into());
         }
         lobby.opponent = Some(our().node);
+        lobby.opponent_deck = deck;
         let snapshot = self.compose_snapshot();
         self.broadcast_snapshot();
         Ok(snapshot)
@@ -149,8 +152,8 @@ impl MemeWarsState {
             .clone()
             .ok_or("Need an opponent to start")?;
         let seed = rand::thread_rng().gen::<u64>();
-        let host_deck = default_deck();
-        let opponent_deck = default_deck();
+        let host_deck = self.lobbies[lobby_index].host_deck.clone();
+        let opponent_deck = self.lobbies[lobby_index].opponent_deck.clone();
         let game = build_game(
             &self.catalog,
             &mut self.next_instance,
@@ -194,15 +197,16 @@ impl MemeWarsState {
     #[http]
     async fn join_remote_lobby(
         &mut self,
-        params: (String, String),
+        params: (String, String, Vec<String>),
     ) -> Result<GameSnapshot, String> {
-        let (host_node, lobby_id) = params;
+        let (host_node, lobby_id, deck) = params;
         let reply = self
             .send_wire_message(
                 &host_node,
                 WireMessage::JoinLobby(JoinLobbyPayload {
                     lobby_id,
                     node_id: our().node.clone(),
+                    deck,
                 }),
             )
             .await?;
@@ -245,6 +249,8 @@ impl MemeWarsState {
     #[local]
     #[http]
     async fn reset(&mut self) -> Result<(), String> {
+        self.lobbies.retain(|l| !l.started);
+        self.discovered_lobbies.retain(|l| !l.started);
         self.game = None;
         self.broadcast_snapshot();
         Ok(())
@@ -452,6 +458,7 @@ impl MemeWarsState {
                     return Err("Lobby already has an opponent".into());
                 }
                 lobby.opponent = Some(payload.node_id);
+                lobby.opponent_deck = payload.deck;
                 let snapshot = self.compose_snapshot();
                 self.broadcast_snapshot();
                 Ok(WireReply::Snapshot(snapshot))
@@ -622,8 +629,8 @@ impl MemeWarsState {
                 let snapshot = self.host_lobby(config).await?;
                 Ok(WsServerMessage::Snapshot(snapshot))
             }
-            WsClientMessage::JoinLobby { lobby_id } => {
-                let snapshot = self.join_lobby(lobby_id).await?;
+            WsClientMessage::JoinLobby { lobby_id, deck } => {
+                let snapshot = self.join_lobby((lobby_id, deck)).await?;
                 Ok(WsServerMessage::Snapshot(snapshot))
             }
             WsClientMessage::StartLobbyGame { lobby_id } => {
@@ -637,8 +644,9 @@ impl MemeWarsState {
             WsClientMessage::JoinRemoteLobby {
                 host_node,
                 lobby_id,
+                deck,
             } => {
-                let snapshot = self.join_remote_lobby((host_node, lobby_id)).await?;
+                let snapshot = self.join_remote_lobby((host_node, lobby_id, deck)).await?;
                 Ok(WsServerMessage::Snapshot(snapshot))
             }
             WsClientMessage::SyncRemoteGame { host_node } => {
